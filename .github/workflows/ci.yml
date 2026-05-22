@@ -296,6 +296,9 @@ jobs:
       - name: Install Cypress deps
         working-directory: cypress
         run: pnpm install --frozen-lockfile || pnpm install
+      - name: Install Cypress binary
+        working-directory: cypress
+        run: pnpm exec cypress install
       - name: Run Cypress
         uses: cypress-io/github-action@v6
         with:
