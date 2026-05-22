@@ -49,7 +49,7 @@ jobs:
       - name: Stop container
         if: always()
         run: docker stop qal-perf || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: k6-summary

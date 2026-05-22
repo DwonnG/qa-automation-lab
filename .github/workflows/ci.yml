@@ -58,7 +58,7 @@ jobs:
       - name: Tests with coverage
         working-directory: demo-app
         run: uv run pytest -n auto --randomly-seed=last --junitxml=report.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: demo-app-reports
@@ -91,12 +91,12 @@ jobs:
       - name: Build
         working-directory: web
         run: pnpm build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: web-coverage
           path: web/coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: web/dist
@@ -147,7 +147,7 @@ jobs:
           if [ -f server.pid ]; then
             kill "$(cat server.pid)" || true
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pytest-api-report
@@ -201,7 +201,7 @@ jobs:
           if [ -f server.pid ]; then
             kill "$(cat server.pid)" || true
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: schemathesis-report
@@ -245,7 +245,7 @@ jobs:
         env:
           CI: "true"
         run: pnpm test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -311,7 +311,7 @@ jobs:
           if [ -f server.pid ]; then
             kill "$(cat server.pid)" || true
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cypress-artifacts
