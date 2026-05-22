@@ -1,72 +1,86 @@
 version: 2
 
+# Each directory/ecosystem opens at most one grouped PR per week, regardless of
+# how many dependencies have updates (patch, minor, or major). Tune
+# open-pull-requests-limit per entry if you need more parallelism.
+
 updates:
   - package-ecosystem: pip
     directory: /demo-app
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: pip
     directory: /pytest-api
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: pip
     directory: /schemathesis
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: npm
     directory: /playwright
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: npm
     directory: /cypress
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      patch-and-minor:
-        update-types:
-          - patch
-          - minor
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      all-updates:
+        patterns: ["*"]
+        update-types: [patch, minor, major]
