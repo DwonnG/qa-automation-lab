@@ -10,6 +10,7 @@ export default tseslint.config(
     plugins: { playwright },
     rules: {
       ...playwright.configs["flat/recommended"].rules,
+      "playwright/no-skipped-test": ["warn", { allowConditional: true }],
       "playwright/expect-expect": [
         "warn",
         {

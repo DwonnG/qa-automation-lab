@@ -6,7 +6,7 @@ End-to-end UI tests using Playwright with TypeScript. Showcases:
 - Accessibility-first selectors (`getByRole`, `getByLabel`) - never CSS classes.
 - API-issued bearer token piped into `sessionStorage` via `page.addInitScript()` for fast, deterministic auth.
 - Cross-browser projects: Chromium, Firefox, WebKit, Mobile Safari.
-- Visual smoke via `toHaveScreenshot()`.
+- Visual smoke via `toHaveScreenshot()` (opt-in; see [Visual snapshots](#visual-snapshots)).
 - Axe-core accessibility scans on every key view.
 
 ## Run
@@ -21,6 +21,16 @@ pnpm exec playwright show-report
 ```
 
 The config's `webServer` block auto-starts `uv run uvicorn demo_app.main:app --port 5050` from `../demo-app/` with `APP_ENV=test` to enable the `/admin/reset` route used by the auth fixture.
+
+## Visual snapshots
+
+`tests/visual.spec.ts` is skipped by default because pixel baselines are sensitive to the host OS, browser version, and font hinting. To run locally:
+
+```bash
+RUN_VISUAL_TESTS=1 pnpm exec playwright test --project=chromium tests/visual.spec.ts --update-snapshots
+```
+
+Commit the generated `tests/visual.spec.ts-snapshots/*-{platform}.png` if you want CI to enforce it; then enable the suite in CI by setting `RUN_VISUAL_TESTS=1` for a Linux runner.
 
 ## Structure
 

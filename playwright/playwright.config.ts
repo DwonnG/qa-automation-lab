@@ -11,7 +11,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 0,
-  workers: IS_CI ? 2 : undefined,
+  // Serial workers: the auth fixture resets the shared backend store, so parallel
+  // workers race each other's data. Per-worker isolation is a future enhancement.
+  workers: 1,
   timeout: 30_000,
   expect: { timeout: 5_000 },
   reporter: [
