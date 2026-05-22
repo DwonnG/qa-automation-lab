@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.99 0 0);
+  --color-foreground: oklch(0.18 0.02 264);
+  --color-muted: oklch(0.94 0.01 264);
+  --color-muted-foreground: oklch(0.45 0.02 264);
+  --color-border: oklch(0.88 0.01 264);
+  --color-primary: oklch(0.55 0.18 264);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-destructive: oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --radius-md: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: oklch(0.16 0.01 264);
+    --color-foreground: oklch(0.96 0.005 264);
+    --color-muted: oklch(0.22 0.01 264);
+    --color-muted-foreground: oklch(0.7 0.01 264);
+    --color-border: oklch(0.3 0.01 264);
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}

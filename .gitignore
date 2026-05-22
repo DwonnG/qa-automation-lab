@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.coverage
+.coverage.*
+coverage.xml
+# Vitest / Istanbul HTML coverage output
+coverage/
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv
+.uv/
+
+# Node
+node_modules/
+.pnpm-store/
+*.log
+.npm
+
+# Build outputs
+web/dist/
+web/build/
+playwright-report/
+test-results/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Secrets
+*.pem
+*.key
+
+# k6 outputs
+perf/summary.json
+perf/*.html
+
+# Schemathesis
+.hypothesis/
+schemathesis-cassette.yaml

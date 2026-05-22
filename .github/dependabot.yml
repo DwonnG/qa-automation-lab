@@ -1,0 +1,72 @@
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /demo-app
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: pip
+    directory: /pytest-api
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: pip
+    directory: /schemathesis
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: npm
+    directory: /playwright
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: npm
+    directory: /cypress
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

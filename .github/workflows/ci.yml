@@ -1,0 +1,350 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.0.0"
+  UV_VERSION: "0.5.10"
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  demo-app-tests:
+    name: demo-app (unit + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Lint and format check
+        working-directory: demo-app
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Tests with coverage
+        working-directory: demo-app
+        run: uv run pytest -n auto --randomly-seed=last --junitxml=report.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-app-reports
+          path: |
+            demo-app/coverage.xml
+            demo-app/report.xml
+
+  web-tests:
+    name: web (component + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install
+        working-directory: web
+        run: pnpm install --frozen-lockfile || pnpm install
+      - name: Lint
+        working-directory: web
+        run: pnpm lint
+      - name: Tests
+        working-directory: web
+        run: pnpm test
+      - name: Build
+        working-directory: web
+        run: pnpm build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-coverage
+          path: web/coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+  pytest-api:
+    name: pytest-api (E2E)
+    runs-on: ubuntu-latest
+    needs: web-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Start backend
+        working-directory: demo-app
+        env:
+          APP_ENV: test
+        run: |
+          uv run uvicorn demo_app.main:app --port 5050 &
+          echo $! > server.pid
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          echo "server did not come up" >&2
+          exit 1
+      - name: Sync test deps
+        working-directory: pytest-api
+        run: uv sync
+      - name: Run tests
+        working-directory: pytest-api
+        run: uv run pytest -n auto --junitxml=report.xml
+      - name: Stop backend
+        if: always()
+        working-directory: demo-app
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-api-report
+          path: pytest-api/report.xml
+
+  schemathesis:
+    name: schemathesis (contract)
+    runs-on: ubuntu-latest
+    needs: web-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Start backend
+        working-directory: demo-app
+        env:
+          APP_ENV: test
+        run: |
+          uv run uvicorn demo_app.main:app --port 5050 &
+          echo $! > server.pid
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Sync schemathesis deps
+        working-directory: schemathesis
+        run: uv sync
+      - name: Run Schemathesis property-based suite
+        working-directory: schemathesis
+        env:
+          BASE_URL: http://localhost:5050
+          DEMO_PIN: "000000"
+        run: uv run pytest -n auto --junitxml=report.xml
+      - name: Stop backend
+        if: always()
+        working-directory: demo-app
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schemathesis-report
+          path: schemathesis/report.xml
+
+  playwright:
+    name: playwright (UI E2E + a11y)
+    runs-on: ubuntu-latest
+    needs: web-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: playwright/pnpm-lock.yaml
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Install Playwright deps
+        working-directory: playwright
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm exec playwright install --with-deps
+      - name: Run Playwright (auto-starts server via webServer config)
+        working-directory: playwright
+        env:
+          CI: "true"
+        run: pnpm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright/playwright-report
+            playwright/test-results
+
+  cypress:
+    name: cypress (UI E2E)
+    runs-on: ubuntu-latest
+    needs: web-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: cypress/pnpm-lock.yaml
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Start backend
+        working-directory: demo-app
+        env:
+          APP_ENV: test
+        run: |
+          uv run uvicorn demo_app.main:app --port 5050 &
+          echo $! > server.pid
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install Cypress deps
+        working-directory: cypress
+        run: pnpm install --frozen-lockfile || pnpm install
+      - name: Run Cypress
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: cypress
+          install: false
+          browser: chrome
+          wait-on: "http://localhost:5050/api/health"
+          wait-on-timeout: 60
+      - name: Stop backend
+        if: always()
+        working-directory: demo-app
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-artifacts
+          path: |
+            cypress/cypress/screenshots
+            cypress/cypress/videos
+
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: qa-automation-lab:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test image
+        run: |
+          docker run -d --rm --name qal -p 5050:5050 qa-automation-lab:ci
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then
+              docker stop qal
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs qal || true
+          docker stop qal || true
+          exit 1

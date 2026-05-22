@@ -1,0 +1,37 @@
+.git
+.github
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+**/htmlcov
+**/.coverage*
+**/.uv
+**/.hypothesis
+**/playwright-report
+**/test-results
+**/cypress/screenshots
+**/cypress/videos
+
+docs/adr/.scratch
+
+perf/summary.json
+playwright/playwright-report
+playwright/test-results
+
+# Top-level project hygiene
+.DS_Store
+*.log
+
+# Test repositories not needed at build time
+pytest-api/
+schemathesis/
+playwright/
+cypress/
+perf/

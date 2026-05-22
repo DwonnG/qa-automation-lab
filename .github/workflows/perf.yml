@@ -1,0 +1,56 @@
+name: Performance (k6)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.5.10"
+
+jobs:
+  k6-smoke:
+    name: items_smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: qa-automation-lab:perf
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start container
+        run: |
+          docker run -d --rm --name qal-perf -p 5050:5050 \
+            -e APP_ENV=test qa-automation-lab:perf
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs qal-perf
+          exit 1
+      - name: Run k6 smoke
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: perf/items_smoke.js
+        env:
+          BASE_URL: http://localhost:5050
+          SUMMARY_FILE: perf/summary.json
+      - name: Stop container
+        if: always()
+        run: docker stop qal-perf || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-summary
+          path: perf/summary.json
