@@ -19,7 +19,7 @@
     "@testing-library/cypress": "^10.0.3",
     "cypress": "^14.0.0",
     "eslint": "^9.17.0",
-    "eslint-plugin-cypress": "^4.1.0",
+    "eslint-plugin-cypress": "^6.4.1",
     "globals": "^15.14.0"
   }
 }
