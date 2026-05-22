@@ -25,7 +25,7 @@ jobs:
     name: pre-commit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -39,7 +39,7 @@ jobs:
     name: demo-app (unit + integration)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v4
         with:
           version: ${{ env.UV_VERSION }}
@@ -70,7 +70,7 @@ jobs:
     name: web (component + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: web-tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v4
         with:
           version: ${{ env.UV_VERSION }}
@@ -158,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: web-tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v4
         with:
           version: ${{ env.UV_VERSION }}
@@ -212,7 +212,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: web-tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v4
         with:
           version: ${{ env.UV_VERSION }}
@@ -258,7 +258,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: web-tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v4
         with:
           version: ${{ env.UV_VERSION }}
@@ -323,7 +323,7 @@ jobs:
     name: docker-build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6
