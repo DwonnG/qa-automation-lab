@@ -5,7 +5,7 @@ description = "End-to-end API tests against the qa-automation-lab demo backend."
 requires-python = ">=3.13"
 dependencies = [
   "httpx>=0.27.0",
-  "pytest>=8.3.0",
+  "pytest>=9.0.3",
   "pytest-xdist>=3.6.0",
   "pytest-randomly>=3.16.0",
   "faker>=33.0.0",
