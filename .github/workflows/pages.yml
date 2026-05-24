@@ -85,7 +85,11 @@ jobs:
             ci_sha="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json headSha --jq '.[0].headSha')"
             ci_at="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json updatedAt --jq '.[0].updatedAt')"
           fi
-          perf_run_id="$(gh run list --workflow=perf.yml --branch=main --status=success --limit=1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+          # Use status=completed (not success) so failed-threshold runs still
+          # populate the perf card. The k6 summary artifact is uploaded with
+          # if: always() in perf.yml, and the dashboard has a dedicated red
+          # "thresholds violated" state for these runs.
+          perf_run_id="$(gh run list --workflow=perf.yml --branch=main --status=completed --limit=1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
           echo "ci_run_id=${ci_run_id:-}" >> "$GITHUB_OUTPUT"
           echo "ci_run_url=${ci_run_url:-}" >> "$GITHUB_OUTPUT"
           echo "ci_sha=${ci_sha:-}" >> "$GITHUB_OUTPUT"
