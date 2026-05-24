@@ -11,20 +11,16 @@
   var toggle = document.querySelector(".theme-toggle");
   if (toggle) {
     var syncLabel = function () {
-      var current = document.documentElement.getAttribute("data-theme") || "dark";
+      var current =
+        document.documentElement.getAttribute("data-theme") || "dark";
       var next = current === "dark" ? "light" : "dark";
-      toggle.setAttribute(
-        "aria-label",
-        "Switch to " + next + " mode",
-      );
-      toggle.setAttribute(
-        "title",
-        "Switch to " + next + " mode",
-      );
+      toggle.setAttribute("aria-label", "Switch to " + next + " mode");
+      toggle.setAttribute("title", "Switch to " + next + " mode");
     };
     syncLabel();
     toggle.addEventListener("click", function () {
-      var current = document.documentElement.getAttribute("data-theme") || "dark";
+      var current =
+        document.documentElement.getAttribute("data-theme") || "dark";
       var next = current === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
       try {

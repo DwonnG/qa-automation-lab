@@ -82,7 +82,9 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install
         working-directory: web
-        run: pnpm install --frozen-lockfile || pnpm install
+        # pnpm v10+ defaults to frozen mode in CI; the explicit
+        # --no-frozen-lockfile fallback actually unblocks drift.
+        run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
       - name: Lint
         working-directory: web
         run: pnpm lint
@@ -244,7 +246,7 @@ jobs:
       - name: Install Playwright deps
         working-directory: playwright
         run: |
-          pnpm install --frozen-lockfile || pnpm install
+          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
           pnpm exec playwright install --with-deps
       - name: Run Playwright (auto-starts server via webServer config)
         working-directory: playwright
@@ -301,7 +303,11 @@ jobs:
           exit 1
       - name: Install Cypress deps
         working-directory: cypress
-        run: pnpm install --frozen-lockfile || pnpm install
+        # pnpm v10+ defaults to frozen-lockfile in CI even without the flag,
+        # so the bare `|| pnpm install` fallback was a no-op. Explicitly
+        # opting out lets the install repair drift (e.g. when a new dev
+        # dep lands without a refreshed lockfile from a Cisco-routed npmrc).
+        run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
       - name: Install Cypress binary
         working-directory: cypress
         run: pnpm exec cypress install

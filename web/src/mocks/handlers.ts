@@ -16,7 +16,9 @@ const SEED: DemoItem[] = [
   { id: "demo-3", name: "Sprocket", quantity: 27 },
 ];
 
-const store: Map<string, DemoItem> = new Map(SEED.map((item) => [item.id, item]));
+const store: Map<string, DemoItem> = new Map(
+  SEED.map((item) => [item.id, item]),
+);
 
 const DEMO_PIN = "000000";
 const PIN_PATTERN = /^\d{6}$/u;
@@ -71,9 +73,9 @@ export const handlers = [
 
   http.post(LOGIN_URL, async ({ request }) => {
     await delay(150);
-    const body = (await request.json().catch(() => null)) as
-      | { pin?: unknown }
-      | null;
+    const body = (await request.json().catch(() => null)) as {
+      pin?: unknown;
+    } | null;
     const pin = body?.pin;
     if (typeof pin !== "string" || !PIN_PATTERN.test(pin) || pin !== DEMO_PIN) {
       return HttpResponse.json(
@@ -94,14 +96,12 @@ export const handlers = [
   http.post(ITEMS_URL, async ({ request }) => {
     const unauthorized = requireBearer(request);
     if (unauthorized) return unauthorized;
-    const body = (await request.json().catch(() => null)) as
-      | { name?: unknown; quantity?: unknown }
-      | null;
+    const body = (await request.json().catch(() => null)) as {
+      name?: unknown;
+      quantity?: unknown;
+    } | null;
     if (!body || !isCleanName(body.name)) {
-      return HttpResponse.json(
-        { detail: "name is required" },
-        { status: 422 },
-      );
+      return HttpResponse.json({ detail: "name is required" }, { status: 422 });
     }
     const quantity = clampQuantity(body.quantity);
     if (quantity === null) {
@@ -137,9 +137,10 @@ export const handlers = [
     if (!existing) {
       return HttpResponse.json({ detail: "item not found" }, { status: 404 });
     }
-    const body = (await request.json().catch(() => null)) as
-      | { name?: unknown; quantity?: unknown }
-      | null;
+    const body = (await request.json().catch(() => null)) as {
+      name?: unknown;
+      quantity?: unknown;
+    } | null;
     const next: DemoItem = { ...existing };
     if (body?.name !== undefined) {
       if (!isCleanName(body.name)) {

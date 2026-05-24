@@ -152,7 +152,9 @@ async function main() {
     ensureDir(join(OUT, "demo"));
     await cp(WEB_DIST, join(OUT, "demo"), { recursive: true });
   } else {
-    console.warn(`[build-pages] web dist missing at ${WEB_DIST}; demo will be unavailable`);
+    console.warn(
+      `[build-pages] web dist missing at ${WEB_DIST}; demo will be unavailable`,
+    );
     ensureDir(join(OUT, "demo"));
     writeFileSync(join(OUT, "demo", "index.html"), renderMissingDemo());
   }
@@ -176,7 +178,10 @@ async function main() {
     JSON.stringify(dashboard, null, 2) + "\n",
   );
 
-  writeFileSync(join(OUT, "index.html"), renderDashboard(dashboard, suiteResults));
+  writeFileSync(
+    join(OUT, "index.html"),
+    renderDashboard(dashboard, suiteResults),
+  );
   console.log(`[build-pages] wrote dashboard to ${OUT}`);
 }
 
@@ -185,7 +190,9 @@ async function main() {
 // ---------------------------------------------------------------------------
 
 function collectSuite(suite, artifactsDir) {
-  const artifactDir = suite.artifact ? join(artifactsDir, suite.artifact) : null;
+  const artifactDir = suite.artifact
+    ? join(artifactsDir, suite.artifact)
+    : null;
   const available = artifactDir ? existsSync(artifactDir) : false;
   const result = {
     ...suite,
@@ -205,7 +212,9 @@ function collectSuite(suite, artifactsDir) {
       try {
         result.perf = JSON.parse(readFileSync(summaryPath, "utf8"));
       } catch (err) {
-        console.warn(`[build-pages] failed to parse k6 summary: ${err.message}`);
+        console.warn(
+          `[build-pages] failed to parse k6 summary: ${err.message}`,
+        );
       }
     }
     return result;
@@ -222,7 +231,9 @@ function collectSuite(suite, artifactsDir) {
         aggregated = sumStats(aggregated, parsed.stats);
         allCases.push(...parsed.cases);
       } catch (err) {
-        console.warn(`[build-pages] failed to parse ${xmlPath}: ${err.message}`);
+        console.warn(
+          `[build-pages] failed to parse ${xmlPath}: ${err.message}`,
+        );
       }
     }
     result.stats = aggregated;
@@ -290,7 +301,9 @@ function aggregate(results) {
     totals.tests - totals.failures - totals.errors - totals.skipped,
   );
   totals.pass_rate =
-    totals.tests > 0 ? totals.passed / (totals.tests - totals.skipped || 1) : null;
+    totals.tests > 0
+      ? totals.passed / (totals.tests - totals.skipped || 1)
+      : null;
   return totals;
 }
 
@@ -620,7 +633,9 @@ function renderStatusBadge(overall, totals, ci, updated) {
     totals.suites_with_data > 0
       ? ` &middot; ${formatInt(totals.suites_with_data)} suite${totals.suites_with_data === 1 ? "" : "s"} on <code>main</code>`
       : "";
-  const ago = ci?.triggered_at ? humanAgo(new Date(ci.triggered_at)) : humanAgo(updated);
+  const ago = ci?.triggered_at
+    ? humanAgo(new Date(ci.triggered_at))
+    : humanAgo(updated);
   return `
     <div class="status-badge status-badge--${overall.klass}">
       <span class="pulse" aria-hidden="true"></span>
@@ -873,7 +888,9 @@ function writeSuiteDetail(suite) {
       try {
         cpRecursiveSync(src, dest);
       } catch (err) {
-        console.warn(`[build-pages] copy ${src} -> ${dest} failed: ${err.message}`);
+        console.warn(
+          `[build-pages] copy ${src} -> ${dest} failed: ${err.message}`,
+        );
       }
     }
   }
@@ -906,12 +923,17 @@ function writeSuiteDetail(suite) {
 
 function renderJunitDetail(suite) {
   if (!suite.available || !suite.stats) {
-    return renderEmptyDetail(suite, "No JUnit XML uploaded yet for this suite.");
+    return renderEmptyDetail(
+      suite,
+      "No JUnit XML uploaded yet for this suite.",
+    );
   }
   const status = suiteStatus(suite.stats);
   const passed = passedCount(suite.stats);
   const failedTotal = suite.stats.failures + suite.stats.errors;
-  const failures = suite.cases.filter((c) => c.status === "failed" || c.status === "error");
+  const failures = suite.cases.filter(
+    (c) => c.status === "failed" || c.status === "error",
+  );
   const allRows = suite.cases
     .map(
       (c) => `
@@ -938,7 +960,8 @@ function renderJunitDetail(suite) {
     )
     .join("");
   const htmlLink =
-    suite.htmlReport && existsSync(join(OUT, "reports", suite.key, "full", "index.html"))
+    suite.htmlReport &&
+    existsSync(join(OUT, "reports", suite.key, "full", "index.html"))
       ? `<a class="btn btn--ghost" href="./full/">Open native HTML report &rarr;</a>`
       : "";
   return `
@@ -961,10 +984,16 @@ function renderHtmlEmbedDetail(suite) {
   if (!suite.available) {
     return renderEmptyDetail(suite, "No Playwright report uploaded yet.");
   }
-  const hasHtml = existsSync(join(OUT, "reports", suite.key, "full", "index.html"));
-  const status = suite.stats ? suiteStatus(suite.stats) : { label: "—", klass: "idle" };
+  const hasHtml = existsSync(
+    join(OUT, "reports", suite.key, "full", "index.html"),
+  );
+  const status = suite.stats
+    ? suiteStatus(suite.stats)
+    : { label: "—", klass: "idle" };
   const passed = suite.stats ? passedCount(suite.stats) : 0;
-  const failedTotal = suite.stats ? suite.stats.failures + suite.stats.errors : 0;
+  const failedTotal = suite.stats
+    ? suite.stats.failures + suite.stats.errors
+    : 0;
   const primaryCta = hasHtml
     ? `<a class="btn btn--primary" href="./full/">Open the Playwright HTML report &rarr;</a>`
     : "";
@@ -983,9 +1012,13 @@ function renderCypressDetail(suite) {
   if (!suite.available) {
     return renderEmptyDetail(suite, "No Cypress run uploaded yet.");
   }
-  const status = suite.stats ? suiteStatus(suite.stats) : { label: "—", klass: "idle" };
+  const status = suite.stats
+    ? suiteStatus(suite.stats)
+    : { label: "—", klass: "idle" };
   const passed = suite.stats ? passedCount(suite.stats) : 0;
-  const failedTotal = suite.stats ? suite.stats.failures + suite.stats.errors : 0;
+  const failedTotal = suite.stats
+    ? suite.stats.failures + suite.stats.errors
+    : 0;
   const screenshots = suite.cypress?.screenshots ?? [];
   const videos = suite.cypress?.videos ?? [];
   const screenshotGallery = screenshots.length
@@ -1042,7 +1075,9 @@ function renderCypressDetail(suite) {
 // re-rendering the head/metrics block.
 function renderJunitTail(suite) {
   if (!suite.available || !suite.stats) return "";
-  const failures = suite.cases.filter((c) => c.status === "failed" || c.status === "error");
+  const failures = suite.cases.filter(
+    (c) => c.status === "failed" || c.status === "error",
+  );
   const allRows = suite.cases
     .map(
       (c) => `
@@ -1268,7 +1303,10 @@ function suiteStatus(stats) {
 }
 
 function passedCount(stats) {
-  return Math.max(0, stats.tests - stats.failures - stats.errors - stats.skipped);
+  return Math.max(
+    0,
+    stats.tests - stats.failures - stats.errors - stats.skipped,
+  );
 }
 
 function formatInt(n) {
