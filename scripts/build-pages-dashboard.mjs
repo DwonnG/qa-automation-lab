@@ -29,7 +29,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { cp, readdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { argv, env } from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -100,7 +100,10 @@ const SUITES = [
     tools: "Playwright, axe-core",
     artifact: "playwright-report",
     junit: "results.xml",
-    htmlReport: { artifact: "playwright-report", path: "." },
+    // The Playwright job uploads `playwright/playwright-report` as-is,
+    // so `actions/upload-artifact` preserves the leaf folder name and
+    // the HTML report lives at `<artifact-root>/playwright-report/`.
+    htmlReport: { artifact: "playwright-report", path: "playwright-report" },
     detailMode: "html",
     sourceHref: `${REPO_URL}/tree/main/playwright`,
   },
@@ -464,9 +467,19 @@ async function listFiles(dir) {
 
 function findJunit(root, pattern) {
   // Supports a literal filename or a single "results/*.xml" style glob.
+  //
+  // For literal filenames we first try the artifact root and then fall
+  // back to a recursive walk by basename. The walk handles the case
+  // where `actions/upload-artifact` preserves a leaf directory name
+  // inside the archive (e.g. `playwright-report/results.xml` instead
+  // of just `results.xml` at the root). Without this fallback the
+  // parser silently reports the suite as available-but-empty, which is
+  // exactly how Playwright stats went missing on the live dashboard.
   if (!pattern.includes("*")) {
     const candidate = join(root, pattern);
-    return existsSync(candidate) ? [candidate] : [];
+    if (existsSync(candidate)) return [candidate];
+    if (!existsSync(root)) return [];
+    return walk(root).filter((f) => basename(f) === pattern);
   }
   const [subdir, glob] = pattern.split("/");
   const dir = join(root, subdir);
