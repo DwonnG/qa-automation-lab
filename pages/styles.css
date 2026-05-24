@@ -848,14 +848,17 @@ code {
    breathe.
 
    Layout:
-   .lab-pyramid              grid (main pyramid | optional outrigger)
-     .lab-pyramid-main       holds the stack + caption above it
-       .lab-pyramid-stack    ordered list of tier bands (UI → Unit)
-         .lab-tier           one band, width via inline --w
-           .lab-tier-head    tier label + aggregate status chip
-           .lab-tier-rows    one .lab-row per suite in this tier
-             .lab-row        link to detail page + tiny "Source ↗" pill
-     .lab-crosscut           sidebar with Contract + Performance cards
+   .lab-pyramid              flex column, full content width
+     .lab-pyramid-cap        caption above the stack (suites count, etc.)
+     .lab-pyramid-stack      ordered list of tier bands (UI → Unit)
+       .lab-tier             one band, width via inline --w
+         .lab-tier-head      tier label + aggregate status chip
+         .lab-tier-rows      one .lab-row per suite in this tier
+           .lab-row          link to detail page + tiny "Source ↗" pill
+
+   Every suite lives in a tier now (Schemathesis → API, k6 → Integration);
+   the earlier cross-cutting outrigger column is gone, so the pyramid
+   takes the full content width with no side grid.
 
    Tier bands use a per-tier CSS gradient so the silhouette reads as the
    same slate→wine palette as the portfolio's hero pyramid, but each
@@ -864,18 +867,6 @@ code {
    ======================================================================== */
 
 .lab-pyramid {
-  display: grid;
-  gap: clamp(1rem, 2.5vw, 1.75rem);
-  grid-template-columns: 1fr;
-  align-items: start;
-}
-@media (min-width: 980px) {
-  .lab-pyramid {
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  }
-}
-
-.lab-pyramid-main {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -909,8 +900,15 @@ code {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.5rem;
   align-items: center; /* Each band centers itself within the column. */
+  /* A soft directional shadow under the whole stack reads as the
+     pyramid casting a shadow on a surface — adds depth without
+     decorating the bands themselves. */
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.35));
+}
+[data-theme="light"] .lab-pyramid-stack {
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.18));
 }
 
 /* ---- Tier band ---------------------------------------------------------- */
@@ -925,71 +923,205 @@ code {
   background: var(--lab-tier-bg, var(--bg-elevated));
   border: 1px solid var(--lab-tier-border, var(--border));
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(12px);
+  /* --lab-tier-bloom: per-tier inset glow that reinforces
+     "lighter = higher abstraction". UI/API set strong values; the lower
+     tiers leave it transparent so the bloom is a top-of-pyramid feature
+     only. The inset spread (-22 px) keeps the glow inside the slice and
+     concentrates it under the top edge. */
+  --lab-tier-bloom: rgba(255, 255, 255, 0);
+  /* Subtle inner highlight at the top of each band reads as a beveled
+     slice edge, plus a soft bottom shadow so adjacent bands feel like
+     they stack on each other like physical pyramid blocks. The middle
+     inset (the bloom) glows down from the top edge for higher tiers. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 28px 44px -22px var(--lab-tier-bloom),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 0 rgba(0, 0, 0, 0.15);
   transition: border-color 0.25s var(--ease-out), transform 0.25s var(--ease-out);
-}
-.lab-tier::before {
-  /* Subtle highlight strip across the top — gives each band a "pressed"
-     feel that matches the portfolio's card chrome. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--text) 4%, transparent),
-    transparent 35%
-  );
-  pointer-events: none;
 }
 
 /* Tier gradients — matched to the portfolio's SVG hero pyramid so the
-   silhouette reads as the same artifact in both places. Each tier gets
-   a faint colored backdrop + accent border-tint. */
+   silhouette reads as the same artifact in both places. Each band IS
+   a pyramid slice: a full, vivid slate→wine gradient that, when stacked
+   with the band-width gradation, forms the pyramid silhouette directly.
+   No separate backdrop required — the bands carry the shape.
+
+   Tuning notes:
+   - UI/API tiers are lifted 4–5% in brightness vs the earlier draft so
+     they read distinctly against the dark page background instead of
+     dissolving into atmosphere.
+   - UI/API also set --lab-tier-bloom to a non-zero white so the inset
+     box-shadow on .lab-tier paints a subtle glass-like luminosity
+     under their top edge. "Lighter = higher abstraction" — the bloom
+     fades to zero as the pyramid descends.
+   - API picks up a hint of warm violet so the cool→warm gradient flow
+     from UI (slate) to Component (magenta) doesn't jump in one step.
+   - Integration is pulled 3–5% darker + slightly desaturated so it
+     reads as a deeper layer than Component (previously they were too
+     close in saturation strength and visually competed).
+   - Borders are slightly more opaque (~0.55) to crisp each slice's
+     silhouette without going hard-line. */
 .lab-tier--ui {
   --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #6a7392 22%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 70%
+    180deg,
+    #8d97b6 0%,
+    #6b7596 100%
   );
-  --lab-tier-border: color-mix(in srgb, #8a93b3 35%, var(--border));
-  --lab-tier-accent: #8a93b3;
+  --lab-tier-border: rgba(190, 200, 224, 0.55);
+  --lab-tier-accent: #d0d7e7;
+  --lab-tier-bloom: rgba(255, 255, 255, 0.22);
 }
 .lab-tier--api {
+  /* Shifted from a pure cool slate (#565878 → #3e4060) toward a
+     warmer slate-violet so the gradient flows smoothly into the
+     Component tier's magenta below. */
   --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #4e4f73 24%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 70%
+    180deg,
+    #65637e 0%,
+    #4a4666 100%
   );
-  --lab-tier-border: color-mix(in srgb, #6e6f93 35%, var(--border));
-  --lab-tier-accent: #6e6f93;
+  --lab-tier-border: rgba(170, 168, 200, 0.55);
+  --lab-tier-accent: #c1bfd8;
+  --lab-tier-bloom: rgba(255, 255, 255, 0.12);
 }
 .lab-tier--component {
   --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #5a3558 26%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 72%
+    180deg,
+    #6a3868 0%,
+    #4a2148 100%
   );
-  --lab-tier-border: color-mix(in srgb, #8a5588 35%, var(--border));
-  --lab-tier-accent: #b98cb4;
+  --lab-tier-border: rgba(195, 138, 190, 0.55);
+  --lab-tier-accent: #e0b8dd;
 }
 .lab-tier--integration {
+  /* Pulled darker + slightly desaturated from the previous
+     #5e2c48 → #3e1a2e so this tier reads as a deeper layer than
+     Component sitting above it. Bottom edge stays slightly lighter
+     than Unit's top edge so the natural Component→Integration→Unit
+     ordering of "increasingly foundational" still reads. */
   --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #522a43 28%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 72%
+    180deg,
+    #562640 0%,
+    #3a162a 100%
   );
-  --lab-tier-border: color-mix(in srgb, #7a3c5e 38%, var(--border));
-  --lab-tier-accent: #af7896;
+  --lab-tier-border: rgba(170, 105, 140, 0.55);
+  --lab-tier-accent: #cf9eb5;
 }
 .lab-tier--unit {
   --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #4a1f2d 30%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 72%
+    180deg,
+    #4d1f2b 0%,
+    #2f1018 100%
   );
-  --lab-tier-border: color-mix(in srgb, #6f3146 38%, var(--border));
-  --lab-tier-accent: #a5697d;
+  --lab-tier-border: rgba(175, 110, 128, 0.55);
+  --lab-tier-accent: #d49aab;
+}
+
+/* On the colored bands the regular --text and --text-soft variables
+   (tuned for the page background) lose contrast. Force a near-white
+   foreground inside every band so stat numbers, tier names, suite
+   names, and tool chips all stay readable on the slate→wine slices. */
+.lab-tier {
+  color: rgba(245, 247, 252, 0.94);
+}
+.lab-tier .lab-tier-name,
+.lab-tier .lab-tier-id,
+.lab-tier .lab-row-name,
+.lab-tier .lab-row-tools,
+.lab-tier .lab-row-id,
+.lab-tier .lab-row-stat,
+.lab-tier .lab-tier-empty {
+  color: rgba(245, 247, 252, 0.94);
+}
+.lab-tier .lab-row-name {
+  color: #ffffff;
+}
+.lab-tier .lab-row-stat .num {
+  color: #ffffff;
+}
+.lab-tier .lab-row-stat-label,
+.lab-tier .lab-row-source,
+.lab-tier .lab-tier-count {
+  /* "2 SUITES" / "no suite yet" label that sits right after the tier
+     name. Slightly brighter than the previous 0.72 so it doesn't get
+     out-shouted by the now-louder status chip on the opposite side. */
+  color: rgba(245, 247, 252, 0.86);
+  font-weight: 600;
+}
+/* Status chips inside the colored pyramid bands need stronger contrast
+   than the page-level defaults (which were tuned for the page bg, not
+   for sitting on top of saturated slate/wine gradients). Bump weight +
+   size a touch, switch to high-contrast color/border/background mixes,
+   and give each variant a soft glow so the verdict reads from across
+   the page. */
+.lab-tier .status-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0.28rem 0.65rem;
+  /* Default (mostly used by --ok overrides below) — bright white text on
+     a softly tinted dark backdrop, with a crisp border. */
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.lab-tier .status-chip--ok {
+  color: #d8f5e3;
+  background: color-mix(in srgb, var(--ok) 40%, rgba(0, 0, 0, 0.45));
+  border-color: color-mix(in srgb, var(--ok) 75%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 12px color-mix(in srgb, var(--ok) 35%, transparent);
+}
+.lab-tier .status-chip--bad {
+  color: #ffe4e8;
+  background: color-mix(in srgb, var(--bad) 45%, rgba(0, 0, 0, 0.45));
+  border-color: color-mix(in srgb, var(--bad) 80%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 12px color-mix(in srgb, var(--bad) 40%, transparent);
+}
+.lab-tier .status-chip--idle {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.lab-tier .lab-row {
+  /* Interior cards sit 12–14% darker than their tier band (was 18%) so
+     stat numbers + suite names scan a beat faster — still enough
+     contrast to feel like a windowed inset, but the white text now
+     gets a brighter substrate behind it. */
+  background: rgba(0, 0, 0, 0.12);
+  border-color: rgba(255, 255, 255, 0.1);
+  /* Stash a glow color sized off the tier accent so hover can light
+     up without us redeclaring per-tier rules. */
+  --row-hover-glow: color-mix(
+    in srgb,
+    var(--lab-tier-accent, #ffffff) 35%,
+    transparent
+  );
+  transition: background 0.22s var(--ease-out),
+    border-color 0.22s var(--ease-out), transform 0.22s var(--ease-out),
+    box-shadow 0.22s var(--ease-out);
+}
+.lab-tier .lab-row:hover,
+.lab-tier .lab-row:focus-within {
+  /* Restrained hover: 1px lift, the card surface shifts slightly
+     brighter (not darker, which felt like depression rather than
+     attention), border crisps to a near-opaque white, and a soft
+     tier-accent glow blooms underneath. Microscopic on purpose. */
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.28),
+    0 0 0 1px var(--row-hover-glow);
 }
 
 /* Failure state recolors the border + accent without overriding the
@@ -1041,8 +1173,15 @@ code {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* Horizontal layout so multi-suite tiers (UI, Unit) stay the same
+     height as single-suite tiers — bands read like uniform pyramid
+     slices instead of stretching vertically when a tier picks up a
+     second suite. align-items: stretch makes every sub-row card the
+     same height within a tier so two-suite tiers can't have one card
+     taller than the other. */
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.5rem;
 }
 .lab-tier-empty {
@@ -1058,12 +1197,20 @@ code {
 
 .lab-row {
   position: relative;
-  display: grid;
-  /* Primary fills, source pill is a fixed-width column. */
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 0.4rem;
-  padding: 0;
+  /* Basis 0 + grow:1 makes multi-suite tiers split their width evenly
+     regardless of tier width — UI's 38% band shares between Playwright
+     and Cypress side-by-side just like Unit's 100% band shares between
+     Frontend unit and Backend unit. min-width: 0 lets the cards shrink
+     so they never force the tier itself to widen. */
+  flex: 1 1 0;
+  min-width: 0;
+  /* Fixed sub-row height locks every tier band to the same total
+     height — the band's head bar is constant, and one row of
+     sub-row content is constant, so single-suite and multi-suite
+     tiers all read as uniform pyramid slices. Tall enough to fit a
+     two-line wrapped suite name (e.g. "Playwright UI + a11y") plus a
+     wrapped tools line plus the stats row without truncating. */
+  min-height: 92px;
   background: color-mix(in srgb, var(--text) 3%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
   border-radius: 10px;
@@ -1086,14 +1233,19 @@ code {
 }
 
 .lab-row-primary {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.3fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.6rem 1rem;
-  padding: 0.65rem 0.85rem;
+  /* Stack the identity block (name + tools) above the stats so each
+     sub-row card stays narrow enough for horizontal multi-suite layout
+     even at UI's 38% tier width. The source-pill ↗ floats in the
+     top-right corner via absolute positioning (see .lab-row-source). */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.55rem 1.85rem 0.55rem 0.7rem; /* room on right for ↗ pill */
   text-decoration: none;
   color: inherit;
   min-width: 0;
+  height: 100%;
 }
 .lab-row-primary:hover {
   color: inherit; /* underline handled per-element */
@@ -1131,8 +1283,8 @@ code {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: flex-end;
-  gap: 0.55rem 0.95rem;
+  justify-content: flex-start; /* sits below name, left-aligned with it */
+  gap: 0.35rem 0.85rem;
   font-variant-numeric: tabular-nums;
 }
 .lab-row-stat {
@@ -1161,32 +1313,47 @@ code {
 .lab-row-stat--idle strong {
   color: var(--warn);
 }
+/* The pass% cell uses the semantic --ok green so it never gets confused
+   with a failure colour. Previously it picked up --lab-tier-accent,
+   which on the lower (wine-toned) tiers rendered pinkish/red — visually
+   ambiguous against a "100% pass" reading. Green is unambiguous. */
 .lab-row-stat--accent strong {
-  color: var(--lab-tier-accent, var(--accent));
+  color: var(--ok);
 }
 
 /* Source pill — same tiny-uppercase chrome as the old .suite-card-source
    so visitors who saw the previous design still recognize it. Sits in
    its own grid cell on the right with its own click target. */
 .lab-row-source {
+  /* Floats in the top-right corner of each sub-row card so it doesn't
+     consume horizontal space — important now that sub-rows can be as
+     narrow as 200px in multi-suite tiers. */
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.85rem;
+  width: 22px;
+  height: 22px;
   font-size: 0.72rem;
+  line-height: 1;
   color: var(--text-tertiary);
-  background: color-mix(in srgb, var(--text) 4%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 6px;
   text-decoration: none;
-  transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out);
 }
 .lab-row-source:hover {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .lab-row-source:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
 
 /* ---- Cross-cutting outrigger ------------------------------------------- */
@@ -1371,43 +1538,9 @@ code {
   border: 0;
 }
 
-/* Light-theme tweaks: the dark-on-light pyramid bands need slightly
-   stronger backgrounds so the gradient remains visible. */
-[data-theme="light"] .lab-tier--ui {
-  --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #6a7392 38%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 75%
-  );
-}
-[data-theme="light"] .lab-tier--api {
-  --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #4e4f73 40%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 75%
-  );
-}
-[data-theme="light"] .lab-tier--component {
-  --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #5a3558 42%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 76%
-  );
-}
-[data-theme="light"] .lab-tier--integration {
-  --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #522a43 44%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 76%
-  );
-}
-[data-theme="light"] .lab-tier--unit {
-  --lab-tier-bg: linear-gradient(
-    155deg,
-    color-mix(in srgb, #4a1f2d 46%, var(--bg-elevated)) 0%,
-    var(--bg-elevated) 76%
-  );
-}
+/* Bold absolute-color gradients work in both themes — the white-on-color
+   text inside the bands stays readable against slate→wine regardless of
+   page background. No light-theme override needed. */
 
 /* About card -------------------------------------------------------------- */
 

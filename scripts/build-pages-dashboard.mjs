@@ -84,9 +84,9 @@ const SUITES = [
   },
   {
     key: "contract",
-    title: "Contract (property-based)",
-    layer: "Contract",
-    tools: "Schemathesis 4",
+    title: "API contract",
+    layer: "API",
+    tools: "Schemathesis 4 (property-based)",
     artifact: "schemathesis-report",
     junit: "report.xml",
     htmlReport: null,
@@ -120,9 +120,9 @@ const SUITES = [
   },
   {
     key: "perf",
-    title: "Performance (k6)",
-    layer: "Performance",
-    tools: "k6",
+    title: "API load",
+    layer: "Integration",
+    tools: "k6 (load + SLO thresholds)",
     artifact: "k6-summary",
     junit: null,
     htmlReport: null,
@@ -133,8 +133,8 @@ const SUITES = [
 
 // ---------------------------------------------------------------------------
 // Main (invoked at the bottom of the file so all module-level const
-// declarations — TIER_LAYOUT, CROSSCUT_KEYS, CROSSCUT_EYEBROWS, etc. —
-// are initialized before any rendering function reaches them).
+// declarations — TIER_LAYOUT, SUITE_TIER, SUITES, etc. — are
+// initialized before any rendering function reaches them).
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -345,9 +345,16 @@ function publicSuite(r) {
 // ---------------------------------------------------------------------------
 // Tier model: the dashboard's pyramid renders one band per architectural
 // tier, with one or more "sub-rows" (one per suite) inside each band.
-// Cross-cutting suites (Contract, Performance) sit in an outrigger card
-// alongside the pyramid — they describe what the pyramid CAN'T, which is
-// per-layer behaviour vs end-to-end qualities.
+// Every suite lives in a tier — there's no separate "cross-cutting"
+// outrigger any more:
+//   * Contract (Schemathesis) is API testing with a different strategy
+//     (property-based vs example-based), so it joins API E2E in the API
+//     tier.
+//   * Performance (k6) integrates the deployed API + DB + network and
+//     asserts on integrated-system SLOs (p95, error rate) — that's an
+//     integration test that happens to use non-functional thresholds
+//     instead of functional asserts, so it sits in the Integration tier
+//     next to Backend integration.
 //
 // widthPct: HTML width as a percentage of the pyramid container width.
 // UI (top) is narrowest; Unit (base) is widest. This is what gives the
@@ -363,18 +370,18 @@ const TIER_LAYOUT = [
   { key: "unit", label: "Unit", widthPct: 100 },
 ];
 
-const CROSSCUT_KEYS = new Set(["contract", "perf"]);
-
 // Map each suite onto its pyramid tier. Multiple suites can map to the
-// same tier (UI=Playwright+Cypress, API=API E2E+Schemathesis... but we
-// classify Contract as cross-cutting because property-based contract
-// testing isn't a pyramid layer, it's a sibling-cutting validation).
+// same tier (UI = Playwright + Cypress, API = API E2E + Schemathesis,
+// Integration = Backend integration + k6).
 const SUITE_TIER = {
   playwright: "ui",
   cypress: "ui",
   "api-e2e": "api",
-  "web-component": "component",
+  contract: "api",
+  perf: "integration",
   // backend is split synthetically below into backend-unit + backend-integration.
+  // web-component is split synthetically into a Component row (*.test.tsx)
+  // and a Unit row (*.test.ts) — pure-logic vs React component tests.
 };
 
 function buildTiers(suiteResults) {
@@ -386,19 +393,29 @@ function buildTiers(suiteResults) {
     suiteResults.find((r) => r.key === "backend"),
   );
 
+  // Split the Vitest suite into pure-logic unit tests (*.test.ts → Unit tier)
+  // and React component tests (*.test.tsx → Component tier). Mirrors the
+  // backend split so the Unit tier gains a "Frontend unit" row to sit
+  // alongside "Backend unit".
+  const splitWeb = splitWebByExtension(
+    suiteResults.find((r) => r.key === "web-component"),
+  );
+
   // Build a flat suite-pool keyed by tier-row identity. Each entry has
   // everything renderSuiteRow needs.
   const rowsByTier = new Map();
   for (const t of TIER_LAYOUT) rowsByTier.set(t.key, []);
 
   for (const r of suiteResults) {
-    if (CROSSCUT_KEYS.has(r.key)) continue;
     if (r.key === "backend") continue; // handled by splitBackend below
+    if (r.key === "web-component") continue; // handled by splitWeb below
     const tierKey = SUITE_TIER[r.key];
     if (!tierKey) continue;
     rowsByTier.get(tierKey).push(suiteRowFromResult(r));
   }
 
+  if (splitWeb.component) rowsByTier.get("component").push(splitWeb.component);
+  if (splitWeb.unit) rowsByTier.get("unit").push(splitWeb.unit);
   if (splitBackend.unit) rowsByTier.get("unit").push(splitBackend.unit);
   if (splitBackend.integration) {
     rowsByTier.get("integration").push(splitBackend.integration);
@@ -413,11 +430,7 @@ function buildTiers(suiteResults) {
     };
   });
 
-  // Cross-cutting suites keep their existing renderers; we just hand them
-  // to the outrigger in the dashboard order they appear in SUITES.
-  const crosscut = suiteResults.filter((r) => CROSSCUT_KEYS.has(r.key));
-
-  return { tiers, crosscut };
+  return { tiers };
 }
 
 function splitBackendByClass(backend) {
@@ -431,17 +444,60 @@ function splitBackendByClass(backend) {
     /(^|\.)tests\.integration\./.test(c.classname),
   );
   return {
-    unit: backendSubRow(backend, "Backend unit", "pytest", unitCases),
-    integration: backendSubRow(
+    unit: derivedSubRow(backend, "Backend unit", "pytest", unitCases, {
+      sourceHref: `${REPO_URL}/tree/main/demo-app/tests/unit`,
+    }),
+    integration: derivedSubRow(
       backend,
       "Backend integration",
       "pytest, FastAPI TestClient",
       integrationCases,
+      { sourceHref: `${REPO_URL}/tree/main/demo-app/tests/integration` },
     ),
   };
 }
 
-function backendSubRow(backend, title, tools, cases) {
+// Vitest's JUnit reporter sets classname to the test file path. We split
+// the Vitest suite by file extension so React-component tests (.test.tsx,
+// which mount components via React Testing Library) feed the Component
+// tier, while pure-logic tests (.test.ts, e.g. API client utilities)
+// feed the Unit tier. This keeps the Unit tier symmetric with backend:
+// both Frontend unit + Backend unit rows live there.
+//
+// The source-href overrides point each derived row at its dedicated
+// directory on disk (web/tests/component vs web/tests/unit) so the ↗
+// pill in the dashboard jumps straight to the right files instead of
+// to the shared parent tests folder.
+function splitWebByExtension(web) {
+  if (!web || !web.available || !web.cases?.length) {
+    return { component: null, unit: null };
+  }
+  const componentCases = web.cases.filter((c) =>
+    /\.test\.tsx$/.test(c.classname || ""),
+  );
+  const unitCases = web.cases.filter((c) =>
+    /\.test\.ts$/.test(c.classname || ""),
+  );
+  return {
+    component: derivedSubRow(
+      web,
+      "Frontend component",
+      "Vitest, React Testing Library, MSW",
+      componentCases,
+      { sourceHref: `${REPO_URL}/tree/main/web/tests/component` },
+    ),
+    unit: derivedSubRow(web, "Frontend unit", "Vitest", unitCases, {
+      sourceHref: `${REPO_URL}/tree/main/web/tests/unit`,
+    }),
+  };
+}
+
+// Shared builder for synthetic sub-rows projected off a parent suite.
+// Shares detailUrl/key with the parent (they both render off the same
+// JUnit report) but accepts per-row overrides for sourceHref so split
+// rows can point at their dedicated dir on disk instead of the shared
+// parent folder.
+function derivedSubRow(parent, title, tools, cases, overrides = {}) {
   if (cases.length === 0) return null;
   const stats = {
     tests: cases.length,
@@ -451,12 +507,12 @@ function backendSubRow(backend, title, tools, cases) {
     time: cases.reduce((sum, c) => sum + (c.time || 0), 0),
   };
   return {
-    key: backend.key, // share detail page + source href with parent
+    key: parent.key, // share detail page with parent
     title,
     tools,
     stats,
-    detailUrl: backend.detailUrl,
-    sourceHref: backend.sourceHref,
+    detailUrl: parent.detailUrl,
+    sourceHref: overrides.sourceHref ?? parent.sourceHref,
     status: suiteStatus(stats),
     available: true,
   };
@@ -724,9 +780,11 @@ function renderDashboard(data, suiteResults) {
           <h1 class="hero-title">qa-automation-lab</h1>
           <p class="hero-lead">
             A self-contained, multi-framework test automation lab demonstrating
-            a <strong>full test pyramid</strong> plus cross-cutting contract,
-            accessibility, and performance coverage against one bundled React
-            + FastAPI <a href="#sut">system under test</a>.
+            a <strong>full test pyramid</strong> &mdash; from pure-logic units
+            up through component, integration (including k6 load),
+            API (including Schemathesis contract), and UI E2E coverage &mdash;
+            against one bundled React + FastAPI
+            <a href="#sut">system under test</a>.
           </p>
           <div class="hero-actions">
             <a class="btn btn--primary" href="${PAGES_BASE}/demo/">
@@ -747,11 +805,12 @@ function renderDashboard(data, suiteResults) {
             <p class="eyebrow"><span class="eyebrow-num">01</span> Coverage</p>
             <h2>The pyramid, live</h2>
             <p class="section-desc">
-              Five architectural tiers from pure-logic unit tests up to UI E2E,
-              with two cross-cutting suites for capacity and contract
-              correctness. Counts come from JUnit XML or the k6 summary uploaded
-              by the latest CI run on <code>main</code>. Tap a row for the full
-              report; the GitHub icon jumps to the source dir.
+              Five architectural tiers from pure-logic unit tests up to UI E2E.
+              Schemathesis joins API E2E in the API band; k6 load tests join
+              pytest in the Integration band. Counts come from JUnit XML or
+              the k6 summary uploaded by the latest CI run on <code>main</code>.
+              Tap a row for the full report; the GitHub icon jumps to the
+              source dir.
             </p>
           </div>
           ${renderPyramidDashboard(buildTiers(suiteResults))}
@@ -907,34 +966,41 @@ function renderHeroMeta(ci, updated) {
 // grid + "How the lab is shaped" SVG. The pyramid IS the dashboard: each
 // architectural tier is a band sized as a percentage of the container width
 // (38% top → 100% bottom), and each band hosts one or more suite sub-rows
-// with live stats and click-through to the full report. Cross-cutting
-// suites (Contract, Performance) get an outrigger card column on the side
-// because they aren't pyramid tiers — they validate qualities that span
-// every tier.
+// with live stats and click-through to the full report.
+//
+// Every suite now lives in a tier (Schemathesis → API, k6 → Integration);
+// the earlier cross-cutting outrigger is gone, so the pyramid takes the
+// full content width.
 // ---------------------------------------------------------------------------
 
-function renderPyramidDashboard({ tiers, crosscut }) {
+function renderPyramidDashboard({ tiers }) {
   const totalSuites = tiers.reduce((sum, t) => sum + t.rows.length, 0);
   const totalTiersWithSuites = tiers.filter((t) => t.rows.length > 0).length;
 
   return `
     <div class="lab-pyramid">
-      <div class="lab-pyramid-main">
-        <div class="lab-pyramid-cap">
-          <span class="eyebrow eyebrow--tiny" aria-hidden="true">Targets the SUT &darr;</span>
-          <p class="lab-pyramid-title">
-            ${totalTiersWithSuites} architectural tier${totalTiersWithSuites === 1 ? "" : "s"} &middot;
-            ${totalSuites} suite${totalSuites === 1 ? "" : "s"}
-          </p>
-        </div>
-        <ol class="lab-pyramid-stack" aria-label="Test pyramid tiers, narrowest at top">
-          ${tiers.map(renderTierBand).join("\n")}
-        </ol>
+      <div class="lab-pyramid-cap">
+        <span class="eyebrow eyebrow--tiny" aria-hidden="true">Targets the SUT &darr;</span>
+        <p class="lab-pyramid-title">
+          ${totalTiersWithSuites} architectural tier${totalTiersWithSuites === 1 ? "" : "s"} &middot;
+          ${totalSuites} suite${totalSuites === 1 ? "" : "s"}
+        </p>
       </div>
-      ${renderCrossCutOutrigger(crosscut)}
+      <ol class="lab-pyramid-stack" aria-label="Test pyramid tiers, narrowest at top">
+        ${tiers.map(renderTierBand).join("\n")}
+      </ol>
     </div>
   `;
 }
+
+// (Earlier iterations rendered a separate SVG pyramid backdrop. We
+// dropped it because its fixed 1/5 vertical stripes never aligned with
+// the bands' actual heights — multi-suite tiers like UI are taller than
+// single-suite tiers, so the slice boundaries always landed mid-band.
+// The pyramid identity now comes from the bands themselves: per-tier
+// gradient backgrounds matching the portfolio's slate→wine hero
+// pyramid, plus width gradation that makes the silhouette obvious at
+// a glance.)
 
 function renderTierBand(tier) {
   const hasRows = tier.rows.length > 0;
@@ -964,22 +1030,13 @@ function renderTierBand(tier) {
 }
 
 function renderTierRow(row) {
-  // Cross-cutting perf rows are rendered by renderCrossCutCard instead;
-  // tier rows are always backed by JUnit stats.
-  const stats = row.stats ?? { tests: 0, failures: 0, errors: 0, skipped: 0 };
-  const passing = passedCount(stats);
-  const failing = stats.failures + stats.errors;
-  const denom = Math.max(stats.tests - stats.skipped, 1);
-  const passPct = stats.tests > 0 ? Math.round((passing / denom) * 100) : null;
-
-  const failChip =
-    failing > 0
-      ? `<span class="lab-row-stat lab-row-stat--bad"><strong>${formatInt(failing)}</strong> <em>fail</em></span>`
-      : "";
-  const skipChip =
-    stats.skipped > 0
-      ? `<span class="lab-row-stat lab-row-stat--idle"><strong>${formatInt(stats.skipped)}</strong> <em>skip</em></span>`
-      : "";
+  // Perf rows (k6) carry a `perf` shape instead of JUnit `stats` because
+  // load tests assert on non-functional thresholds (p95 ms, error rate)
+  // rather than functional pass/fail per test case. Render them with the
+  // same card chrome as functional rows but swap the stat strip.
+  const statsHtml = row.perf
+    ? renderPerfStats(row.perf)
+    : renderFunctionalStats(row.stats);
 
   return `
     <li class="lab-row lab-row--${row.status.klass}">
@@ -989,14 +1046,7 @@ function renderTierRow(row) {
           <span class="lab-row-tools">${escapeHtml(row.tools)}</span>
         </div>
         <div class="lab-row-stats" role="presentation">
-          <span class="lab-row-stat"><strong>${formatInt(stats.tests)}</strong> <em>tests</em></span>
-          ${failChip}
-          ${skipChip}
-          ${
-            passPct !== null
-              ? `<span class="lab-row-stat lab-row-stat--accent"><strong>${passPct}%</strong> <em>pass</em></span>`
-              : ""
-          }
+          ${statsHtml}
         </div>
       </a>
       <a
@@ -1013,130 +1063,57 @@ function renderTierRow(row) {
   `;
 }
 
-function renderCrossCutOutrigger(crosscut) {
-  if (crosscut.length === 0) return "";
-  return `
-    <aside class="lab-crosscut" aria-labelledby="lab-crosscut-title">
-      <header class="lab-crosscut-head">
-        <h3 id="lab-crosscut-title">Cross-cutting</h3>
-        <p>
-          Suites that validate qualities running through every tier &mdash; not
-          a pyramid layer of their own.
-        </p>
-      </header>
-      <div class="lab-crosscut-list">
-        ${crosscut.map(renderCrossCutCard).join("\n")}
-      </div>
-    </aside>
-  `;
-}
-
-function renderCrossCutCard(suite) {
-  if (suite.key === "perf") return renderCrossCutPerfCard(suite);
-  return renderCrossCutContractCard(suite);
-}
-
-function renderCrossCutContractCard(suite) {
-  const eyebrow = CROSSCUT_EYEBROWS[suite.key] ?? "Cross-cutting";
-  if (!suite.available || !suite.stats) {
-    return `
-      <article class="lab-cross-card lab-cross-card--idle">
-        <header class="lab-cross-card-head">
-          <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
-          <span class="status-chip status-chip--idle">awaiting CI</span>
-        </header>
-        <h4>${escapeHtml(suite.title)}</h4>
-        <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
-        <p class="lab-cross-empty">First successful run will populate this card.</p>
-        <div class="lab-cross-actions">
-          <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
-            Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
-          </a>
-        </div>
-      </article>
-    `;
-  }
-  const stats = suite.stats;
+function renderFunctionalStats(stats) {
+  stats = stats ?? { tests: 0, failures: 0, errors: 0, skipped: 0 };
   const passing = passedCount(stats);
   const failing = stats.failures + stats.errors;
   const denom = Math.max(stats.tests - stats.skipped, 1);
-  const passPct = stats.tests > 0 ? Math.round((passing / denom) * 100) : 0;
-  const status = suiteStatus(stats);
+  const passPct = stats.tests > 0 ? Math.round((passing / denom) * 100) : null;
+
+  const failChip =
+    failing > 0
+      ? `<span class="lab-row-stat lab-row-stat--bad"><strong>${formatInt(failing)}</strong> <em>fail</em></span>`
+      : "";
+  const skipChip =
+    stats.skipped > 0
+      ? `<span class="lab-row-stat lab-row-stat--idle"><strong>${formatInt(stats.skipped)}</strong> <em>skip</em></span>`
+      : "";
+  const passChip =
+    passPct !== null
+      ? `<span class="lab-row-stat lab-row-stat--accent"><strong>${passPct}%</strong> <em>pass</em></span>`
+      : "";
+
   return `
-    <article class="lab-cross-card lab-cross-card--${status.klass}">
-      <header class="lab-cross-card-head">
-        <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
-        <span class="status-chip status-chip--${status.klass}">${escapeHtml(status.label)}</span>
-      </header>
-      <h4>${escapeHtml(suite.title)}</h4>
-      <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
-      <ul class="lab-cross-stats">
-        <li><strong>${formatInt(stats.tests)}</strong> <em>tests</em></li>
-        ${failing > 0 ? `<li class="bad"><strong>${formatInt(failing)}</strong> <em>fail</em></li>` : ""}
-        <li class="accent"><strong>${passPct}%</strong> <em>pass</em></li>
-      </ul>
-      <div class="lab-cross-actions">
-        <a class="lab-cross-primary" href="${escapeAttr(suite.detailUrl)}">View report &rarr;</a>
-        <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
-          Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
-        </a>
-      </div>
-    </article>
+    <span class="lab-row-stat"><strong>${formatInt(stats.tests)}</strong> <em>tests</em></span>
+    ${failChip}
+    ${skipChip}
+    ${passChip}
   `;
 }
 
-function renderCrossCutPerfCard(suite) {
-  const eyebrow = CROSSCUT_EYEBROWS[suite.key] ?? "Cross-cutting";
-  if (!suite.available || !suite.perf) {
-    return `
-      <article class="lab-cross-card lab-cross-card--idle">
-        <header class="lab-cross-card-head">
-          <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
-          <span class="status-chip status-chip--idle">awaiting CI</span>
-        </header>
-        <h4>${escapeHtml(suite.title)}</h4>
-        <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
-        <p class="lab-cross-empty">Dispatch <code>perf.yml</code> to populate this card.</p>
-        <div class="lab-cross-actions">
-          <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
-            Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
-          </a>
-        </div>
-      </article>
-    `;
+// k6 thresholds drive the binary pass/fail verdict; the headline perf
+// numbers (reqs, p95, error rate) replace the tests/pass% pair used by
+// functional rows. Error chip recolors when the failed-request rate is
+// non-zero so a degraded run is obvious even before the threshold flips.
+function renderPerfStats(perf) {
+  if (!perf) {
+    return `<span class="lab-row-stat lab-row-stat--idle"><strong>—</strong> <em>no run</em></span>`;
   }
-  const perf = suite.perf;
-  const klass = perf.thresholds_passed ? "ok" : "bad";
-  const statusLabel = perf.thresholds_passed
-    ? "thresholds OK"
-    : "thresholds violated";
+  const errKlass = perf.failed_rate > 0 ? "lab-row-stat--bad" : "";
   return `
-    <article class="lab-cross-card lab-cross-card--${klass}">
-      <header class="lab-cross-card-head">
-        <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
-        <span class="status-chip status-chip--${klass}">${escapeHtml(statusLabel)}</span>
-      </header>
-      <h4>${escapeHtml(suite.title)}</h4>
-      <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
-      <ul class="lab-cross-stats">
-        <li><strong>${formatInt(perf.request_count ?? 0)}</strong> <em>reqs</em></li>
-        <li><strong>${formatMs(perf.p95_ms)}</strong> <em>p95</em></li>
-        <li class="${perf.failed_rate > 0 ? "bad" : ""}"><strong>${formatPct(perf.failed_rate)}</strong> <em>err</em></li>
-      </ul>
-      <div class="lab-cross-actions">
-        <a class="lab-cross-primary" href="${escapeAttr(suite.detailUrl)}">View report &rarr;</a>
-        <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
-          Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
-        </a>
-      </div>
-    </article>
+    <span class="lab-row-stat"><strong>${formatInt(perf.request_count ?? 0)}</strong> <em>reqs</em></span>
+    <span class="lab-row-stat"><strong>${formatMs(perf.p95_ms)}</strong> <em>p95</em></span>
+    <span class="lab-row-stat ${errKlass}"><strong>${formatPct(perf.failed_rate)}</strong> <em>err</em></span>
   `;
 }
 
-const CROSSCUT_EYEBROWS = {
-  contract: "Contract",
-  perf: "Performance",
-};
+// (The earlier cross-cutting outrigger renderers — renderCrossCutOutrigger,
+// renderCrossCutCard, renderCrossCutContractCard, renderCrossCutPerfCard,
+// and the CROSSCUT_EYEBROWS map — were removed when Schemathesis moved
+// into the API tier and k6 moved into the Integration tier. Their CSS
+// classes (.lab-crosscut*, .lab-cross-card*) remain in styles.css only
+// because the detail pages still reference some of the .lab-cross-* atoms;
+// nothing on the dashboard renders them any more.)
 
 function humanAgo(date) {
   if (!date || isNaN(date.getTime())) return "just now";
@@ -1544,8 +1521,7 @@ function baseLayout({ title, body }) {
       </a>
       <div class="nav-links">
         <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
-        <a href="${PAGES_BASE}/#suites">Suites</a>
-        <a href="${PAGES_BASE}/#shape">Architecture</a>
+        <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
         <a href="${PAGES_BASE}/#sut">SUT</a>
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
