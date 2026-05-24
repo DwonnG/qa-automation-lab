@@ -801,82 +801,9 @@ code {
   max-width: 60ch;
 }
 
-/* Suite grid -------------------------------------------------------------- */
+/* Status chip — used by lab pyramid bands, cross-cutting cards, and the
+   per-suite detail pages (failed test rows). */
 
-.suite-grid {
-  display: grid;
-  gap: 0.9rem;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 640px) {
-  .suite-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (min-width: 920px) {
-  .suite-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.suite-card {
-  display: flex;
-  flex-direction: column;
-  padding: 1.35rem 1.4rem 1.25rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  backdrop-filter: blur(12px);
-  color: inherit;
-  position: relative;
-  overflow: hidden;
-  transition:
-    border-color 0.3s,
-    transform 0.35s var(--ease-out),
-    box-shadow 0.35s;
-}
-.suite-card:hover {
-  border-color: var(--border-hover);
-  transform: translateY(-4px);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
-}
-/* Focus ring is rendered on the card itself when its primary link
-   takes keyboard focus (the inner :focus-visible is hidden so we don't
-   double-paint). Matches the portfolio's featured-card pattern. */
-.suite-card:has(.suite-card-primary:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.suite-card--ok {
-  background: linear-gradient(145deg, var(--ok-dim) 0%, var(--bg-elevated) 55%);
-  border-color: color-mix(in srgb, var(--ok) 22%, var(--border));
-}
-.suite-card--bad {
-  background: linear-gradient(145deg, var(--bad-dim) 0%, var(--bg-elevated) 55%);
-  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
-}
-.suite-card--idle {
-  border-style: dashed;
-}
-
-.suite-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  gap: 0.5rem;
-}
-.layer-pill {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--accent-muted);
-  padding: 0.22rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
 .status-chip {
   font-size: 0.65rem;
   font-weight: 600;
@@ -887,6 +814,7 @@ code {
   color: var(--text-tertiary);
   background: color-mix(in srgb, var(--text) 5%, transparent);
   border: 1px solid var(--border);
+  white-space: nowrap;
 }
 .status-chip--ok {
   color: var(--ok);
@@ -902,112 +830,514 @@ code {
   color: var(--text-tertiary);
 }
 
-.suite-card h3 {
-  margin: 0 0 0.3rem;
+/* Used by per-suite detail page tables (test list, failure summaries). */
+.suite-empty {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+/* ========================================================================
+   The lab pyramid
+   ========================================================================
+
+   Single section that doubles as the dashboard. Stack of bands, each
+   sized as a percentage of the container width (38% top → 100% bottom).
+   The pyramid silhouette emerges from width gradation alone — no
+   clip-path, so text inside each band has the entire band rectangle to
+   breathe.
+
+   Layout:
+   .lab-pyramid              grid (main pyramid | optional outrigger)
+     .lab-pyramid-main       holds the stack + caption above it
+       .lab-pyramid-stack    ordered list of tier bands (UI → Unit)
+         .lab-tier           one band, width via inline --w
+           .lab-tier-head    tier label + aggregate status chip
+           .lab-tier-rows    one .lab-row per suite in this tier
+             .lab-row        link to detail page + tiny "Source ↗" pill
+     .lab-crosscut           sidebar with Contract + Performance cards
+
+   Tier bands use a per-tier CSS gradient so the silhouette reads as the
+   same slate→wine palette as the portfolio's hero pyramid, but each
+   band stays a clean rectangle so stats inside don't get clipped by a
+   slanted edge.
+   ======================================================================== */
+
+.lab-pyramid {
+  display: grid;
+  gap: clamp(1rem, 2.5vw, 1.75rem);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .lab-pyramid {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  }
+}
+
+.lab-pyramid-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lab-pyramid-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.25rem;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+.lab-pyramid-cap .eyebrow--tiny {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent-muted);
+}
+.lab-pyramid-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.lab-pyramid-stack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: center; /* Each band centers itself within the column. */
+}
+
+/* ---- Tier band ---------------------------------------------------------- */
+
+.lab-tier {
+  width: var(--w, 100%);
+  /* On very narrow viewports the gradation gets too dense to be readable.
+     Snap to a usable floor so even UI (38%) shows full content widths. */
+  min-width: min(360px, 100%);
+  position: relative;
+  padding: 0.85rem 1rem 0.9rem;
+  background: var(--lab-tier-bg, var(--bg-elevated));
+  border: 1px solid var(--lab-tier-border, var(--border));
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(12px);
+  transition: border-color 0.25s var(--ease-out), transform 0.25s var(--ease-out);
+}
+.lab-tier::before {
+  /* Subtle highlight strip across the top — gives each band a "pressed"
+     feel that matches the portfolio's card chrome. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--text) 4%, transparent),
+    transparent 35%
+  );
+  pointer-events: none;
+}
+
+/* Tier gradients — matched to the portfolio's SVG hero pyramid so the
+   silhouette reads as the same artifact in both places. Each tier gets
+   a faint colored backdrop + accent border-tint. */
+.lab-tier--ui {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #6a7392 22%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 70%
+  );
+  --lab-tier-border: color-mix(in srgb, #8a93b3 35%, var(--border));
+  --lab-tier-accent: #8a93b3;
+}
+.lab-tier--api {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #4e4f73 24%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 70%
+  );
+  --lab-tier-border: color-mix(in srgb, #6e6f93 35%, var(--border));
+  --lab-tier-accent: #6e6f93;
+}
+.lab-tier--component {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #5a3558 26%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 72%
+  );
+  --lab-tier-border: color-mix(in srgb, #8a5588 35%, var(--border));
+  --lab-tier-accent: #b98cb4;
+}
+.lab-tier--integration {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #522a43 28%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 72%
+  );
+  --lab-tier-border: color-mix(in srgb, #7a3c5e 38%, var(--border));
+  --lab-tier-accent: #af7896;
+}
+.lab-tier--unit {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #4a1f2d 30%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 72%
+  );
+  --lab-tier-border: color-mix(in srgb, #6f3146 38%, var(--border));
+  --lab-tier-accent: #a5697d;
+}
+
+/* Failure state recolors the border + accent without overriding the
+   per-tier gradient, so the band still reads as "Integration" but
+   screams red. */
+.lab-tier--bad {
+  --lab-tier-border: color-mix(in srgb, var(--bad) 55%, var(--border));
+}
+.lab-tier--idle {
+  --lab-tier-border: var(--border);
+  opacity: 0.85;
+}
+
+.lab-tier-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.55rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+}
+.lab-tier-id {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.lab-tier-name {
+  font-family: var(--font-display);
   font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.lab-tier-count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lab-tier-accent, var(--accent-muted));
+}
+.lab-tier-count--idle {
+  color: var(--text-tertiary);
+}
+
+.lab-tier-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.lab-tier-empty {
+  position: relative;
+  margin: 0;
+  padding: 0.25rem 0.1rem;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* ---- Suite row inside a tier ------------------------------------------- */
+
+.lab-row {
+  position: relative;
+  display: grid;
+  /* Primary fills, source pill is a fixed-width column. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.4rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s var(--ease-out), transform 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
+}
+.lab-row:hover {
+  border-color: color-mix(in srgb, var(--lab-tier-accent, var(--accent)) 50%, var(--border));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.lab-row--bad {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bad) 8%, transparent),
+    color-mix(in srgb, var(--text) 3%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--bad) 40%, var(--border));
+}
+
+.lab-row-primary {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.65rem 0.85rem;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+.lab-row-primary:hover {
+  color: inherit; /* underline handled per-element */
+}
+.lab-row-primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.lab-row-id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.lab-row-name {
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
+  /* Allow wrapping at spaces but never truncate. */
+  overflow-wrap: break-word;
 }
-.suite-tools {
-  margin: 0 0 1rem;
-  font-size: 0.78rem;
+.lab-row:hover .lab-row-name {
+  color: var(--ember);
+}
+.lab-row-tools {
+  font-size: 0.72rem;
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
 }
 
-.suite-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.55rem 0.5rem;
-  margin: 0 0 1rem;
-  padding: 0.85rem 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-.suite-stats > div {
+.lab-row-stats {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-.suite-stats .num {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text);
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.55rem 0.95rem;
   font-variant-numeric: tabular-nums;
+}
+.lab-row-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.lab-row-stat strong {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
   letter-spacing: -0.02em;
 }
-.suite-stats span:last-child {
-  font-size: 0.65rem;
+.lab-row-stat em {
+  font-style: normal;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.lab-row-stat--bad strong {
+  color: var(--bad);
+}
+.lab-row-stat--idle strong {
+  color: var(--warn);
+}
+.lab-row-stat--accent strong {
+  color: var(--lab-tier-accent, var(--accent));
+}
+
+/* Source pill — same tiny-uppercase chrome as the old .suite-card-source
+   so visitors who saw the previous design still recognize it. Sits in
+   its own grid cell on the right with its own click target. */
+.lab-row-source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.85rem;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  text-decoration: none;
+  transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+}
+.lab-row-source:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.lab-row-source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- Cross-cutting outrigger ------------------------------------------- */
+
+.lab-crosscut {
+  position: sticky;
+  top: calc(var(--nav-h) + 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(12px);
+}
+.lab-crosscut-head h3 {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.lab-crosscut-head p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+}
+.lab-crosscut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.lab-cross-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.25s var(--ease-out), transform 0.25s var(--ease-out);
+}
+.lab-cross-card:hover {
+  transform: translateY(-2px);
+}
+.lab-cross-card--ok {
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--border));
+}
+.lab-cross-card--bad {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bad) 7%, transparent),
+    color-mix(in srgb, var(--text) 3%, transparent)
+  );
+}
+.lab-cross-card--idle {
+  border-style: dashed;
+}
+.lab-cross-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.lab-cross-eyebrow {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent-muted);
+}
+.lab-cross-card h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.lab-cross-tools {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+.lab-cross-empty {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.lab-cross-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0.55rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.lab-cross-stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
 }
-.suite-stats .bad .num {
+.lab-cross-stats li strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-transform: none;
+}
+.lab-cross-stats li em {
+  font-style: normal;
+}
+.lab-cross-stats li.bad strong {
   color: var(--bad);
 }
-.suite-stats .ok .num {
-  color: var(--ok);
+.lab-cross-stats li.accent strong {
+  color: var(--accent);
 }
-
-/* Card footer with two CTAs: primary "Open report" extends across the
-   whole card via ::after; secondary "Source" floats above on z=1 so it
-   can intercept clicks for the GitHub directory link without breaking
-   the rest of the card's click target. */
-.suite-card-foot {
+.lab-cross-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin: 0;
-  margin-top: auto;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
 }
-.suite-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0;
+.lab-cross-primary {
   font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
   color: var(--accent);
   text-decoration: none;
-  transition: color 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  transition: color 0.2s var(--ease-out);
 }
-.suite-card:hover .suite-cta {
+.lab-cross-primary:hover {
   color: var(--ember);
 }
-.suite-card:hover .suite-cta .arrow {
-  transform: translateX(3px);
-}
-.suite-cta .arrow {
-  display: inline-block;
-  transition: transform 0.25s var(--ease-out);
-}
-.suite-card-primary {
-  /* Position static; ::after resolves against .suite-card (position:
-     relative on .suite-card). z-index: 0 keeps the extender below
-     .suite-card-source which sits at z=1. */
-  position: static;
-}
-.suite-card-primary::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-}
-.suite-card-primary:focus-visible {
-  outline: none;
-}
-.suite-card-source {
-  position: relative;
-  z-index: 1;
+.lab-cross-source {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.28rem 0.6rem;
-  font-size: 0.7rem;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1016,108 +1346,67 @@ code {
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border: 1px solid var(--border);
   border-radius: 4px;
-  transition:
-    color 0.2s var(--ease-out),
-    border-color 0.2s var(--ease-out),
-    background 0.2s var(--ease-out);
+  transition: color 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
-.suite-card-source:hover {
+.lab-cross-source:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
-.suite-card-source .arrow-ext {
+.lab-cross-source .arrow-ext {
   font-size: 0.78rem;
   line-height: 1;
 }
-.suite-empty {
-  margin: 0 0 0.85rem;
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
+
+/* Visually hidden but screen-reader available — used by the source pill
+   to give each row a unique accessible label. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* Shaped section (pyramid + prose) ---------------------------------------- */
-
-.shape-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 820px) {
-  .shape-grid {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    align-items: stretch;
-  }
-}
-
-.shape-card {
-  display: flex;
-  flex-direction: column;
-  padding: 1.6rem 1.6rem 1.5rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  backdrop-filter: blur(12px);
-}
-.shape-card h3 {
-  margin: 0 0 0.65rem;
-  font-family: var(--font-display);
-  font-size: 1.3rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-.shape-card p {
-  margin: 0 0 0.85rem;
-  color: var(--text-secondary);
-  font-size: 0.92rem;
-}
-.shape-card p:last-child {
-  margin-bottom: 0;
-}
-
-.shape-pyramid {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.25rem;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--text) 3%, transparent),
-    transparent 70%
+/* Light-theme tweaks: the dark-on-light pyramid bands need slightly
+   stronger backgrounds so the gradient remains visible. */
+[data-theme="light"] .lab-tier--ui {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #6a7392 38%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 75%
   );
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  min-height: 280px;
 }
-.pyramid-svg {
-  width: 100%;
-  max-width: 380px;
-  height: auto;
-  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.4));
+[data-theme="light"] .lab-tier--api {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #4e4f73 40%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 75%
+  );
 }
-.pyramid-slice {
-  transition: filter 0.25s var(--ease-out), transform 0.25s var(--ease-out);
-  transform-origin: 120px 120px;
+[data-theme="light"] .lab-tier--component {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #5a3558 42%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 76%
+  );
 }
-.pyramid-slice:hover {
-  filter: brightness(1.18);
+[data-theme="light"] .lab-tier--integration {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #522a43 44%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 76%
+  );
 }
-.pyramid-slice-labels text {
-  font-family: var(--font);
-  font-size: 7px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  fill: rgba(255, 255, 255, 0.92);
-  text-anchor: middle;
-  pointer-events: none;
-}
-[data-theme="light"] .pyramid-slice-labels text {
-  fill: rgba(255, 255, 255, 0.95);
-}
-[data-theme="light"] .pyramid-svg {
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.3)) brightness(0.92) contrast(1.12)
-    saturate(1.1);
+[data-theme="light"] .lab-tier--unit {
+  --lab-tier-bg: linear-gradient(
+    155deg,
+    color-mix(in srgb, #4a1f2d 46%, var(--bg-elevated)) 0%,
+    var(--bg-elevated) 76%
+  );
 }
 
 /* About card -------------------------------------------------------------- */

@@ -132,10 +132,10 @@ const SUITES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Main
+// Main (invoked at the bottom of the file so all module-level const
+// declarations — TIER_LAYOUT, CROSSCUT_KEYS, CROSSCUT_EYEBROWS, etc. —
+// are initialized before any rendering function reaches them).
 // ---------------------------------------------------------------------------
-
-await main();
 
 async function main() {
   ensureDir(OUT);
@@ -340,6 +340,166 @@ function publicSuite(r) {
     detail_url: r.detailUrl,
     source_href: r.sourceHref,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Tier model: the dashboard's pyramid renders one band per architectural
+// tier, with one or more "sub-rows" (one per suite) inside each band.
+// Cross-cutting suites (Contract, Performance) sit in an outrigger card
+// alongside the pyramid — they describe what the pyramid CAN'T, which is
+// per-layer behaviour vs end-to-end qualities.
+//
+// widthPct: HTML width as a percentage of the pyramid container width.
+// UI (top) is narrowest; Unit (base) is widest. This is what gives the
+// stack its pyramid silhouette without resorting to clip-path tricks
+// that would chew up text inside slanted edges.
+// ---------------------------------------------------------------------------
+
+const TIER_LAYOUT = [
+  { key: "ui", label: "UI E2E", widthPct: 38 },
+  { key: "api", label: "API", widthPct: 54 },
+  { key: "component", label: "Component", widthPct: 70 },
+  { key: "integration", label: "Integration", widthPct: 86 },
+  { key: "unit", label: "Unit", widthPct: 100 },
+];
+
+const CROSSCUT_KEYS = new Set(["contract", "perf"]);
+
+// Map each suite onto its pyramid tier. Multiple suites can map to the
+// same tier (UI=Playwright+Cypress, API=API E2E+Schemathesis... but we
+// classify Contract as cross-cutting because property-based contract
+// testing isn't a pyramid layer, it's a sibling-cutting validation).
+const SUITE_TIER = {
+  playwright: "ui",
+  cypress: "ui",
+  "api-e2e": "api",
+  "web-component": "component",
+  // backend is split synthetically below into backend-unit + backend-integration.
+};
+
+function buildTiers(suiteResults) {
+  // Split the backend suite into derived unit + integration rows based on
+  // pytest classnames (tests.unit.* vs tests.integration.*). The original
+  // backend suite is preserved for the detail page; these are presentation-
+  // only projections for the pyramid.
+  const splitBackend = splitBackendByClass(
+    suiteResults.find((r) => r.key === "backend"),
+  );
+
+  // Build a flat suite-pool keyed by tier-row identity. Each entry has
+  // everything renderSuiteRow needs.
+  const rowsByTier = new Map();
+  for (const t of TIER_LAYOUT) rowsByTier.set(t.key, []);
+
+  for (const r of suiteResults) {
+    if (CROSSCUT_KEYS.has(r.key)) continue;
+    if (r.key === "backend") continue; // handled by splitBackend below
+    const tierKey = SUITE_TIER[r.key];
+    if (!tierKey) continue;
+    rowsByTier.get(tierKey).push(suiteRowFromResult(r));
+  }
+
+  if (splitBackend.unit) rowsByTier.get("unit").push(splitBackend.unit);
+  if (splitBackend.integration) {
+    rowsByTier.get("integration").push(splitBackend.integration);
+  }
+
+  const tiers = TIER_LAYOUT.map((t) => {
+    const rows = rowsByTier.get(t.key) ?? [];
+    return {
+      ...t,
+      rows,
+      status: aggregateTierStatus(rows),
+    };
+  });
+
+  // Cross-cutting suites keep their existing renderers; we just hand them
+  // to the outrigger in the dashboard order they appear in SUITES.
+  const crosscut = suiteResults.filter((r) => CROSSCUT_KEYS.has(r.key));
+
+  return { tiers, crosscut };
+}
+
+function splitBackendByClass(backend) {
+  if (!backend || !backend.available || !backend.cases?.length) {
+    return { unit: null, integration: null };
+  }
+  const unitCases = backend.cases.filter((c) =>
+    /(^|\.)tests\.unit\./.test(c.classname),
+  );
+  const integrationCases = backend.cases.filter((c) =>
+    /(^|\.)tests\.integration\./.test(c.classname),
+  );
+  return {
+    unit: backendSubRow(backend, "Backend unit", "pytest", unitCases),
+    integration: backendSubRow(
+      backend,
+      "Backend integration",
+      "pytest, FastAPI TestClient",
+      integrationCases,
+    ),
+  };
+}
+
+function backendSubRow(backend, title, tools, cases) {
+  if (cases.length === 0) return null;
+  const stats = {
+    tests: cases.length,
+    failures: cases.filter((c) => c.status === "failed").length,
+    errors: cases.filter((c) => c.status === "error").length,
+    skipped: cases.filter((c) => c.status === "skipped").length,
+    time: cases.reduce((sum, c) => sum + (c.time || 0), 0),
+  };
+  return {
+    key: backend.key, // share detail page + source href with parent
+    title,
+    tools,
+    stats,
+    detailUrl: backend.detailUrl,
+    sourceHref: backend.sourceHref,
+    status: suiteStatus(stats),
+    available: true,
+  };
+}
+
+function suiteRowFromResult(r) {
+  if (r.key === "perf") {
+    return {
+      key: r.key,
+      title: r.title,
+      tools: r.tools,
+      perf: r.perf,
+      detailUrl: r.detailUrl,
+      sourceHref: r.sourceHref,
+      status: r.perf
+        ? r.perf.thresholds_passed
+          ? { label: "thresholds OK", klass: "ok" }
+          : { label: "thresholds violated", klass: "bad" }
+        : { label: "no data yet", klass: "idle" },
+      available: r.available && Boolean(r.perf),
+    };
+  }
+  return {
+    key: r.key,
+    title: r.title,
+    tools: r.tools,
+    stats: r.stats,
+    detailUrl: r.detailUrl,
+    sourceHref: r.sourceHref,
+    status: r.stats ? suiteStatus(r.stats) : { label: "no data yet", klass: "idle" },
+    available: r.available && Boolean(r.stats),
+  };
+}
+
+function aggregateTierStatus(rows) {
+  if (rows.length === 0) return { label: "no suite", klass: "idle" };
+  if (rows.some((r) => r.status.klass === "bad")) {
+    return { label: "failing", klass: "bad" };
+  }
+  if (rows.every((r) => r.status.klass === "idle")) {
+    return { label: "no data yet", klass: "idle" };
+  }
+  return { label: "passing", klass: "ok" };
 }
 
 // ---------------------------------------------------------------------------
@@ -582,38 +742,24 @@ function renderDashboard(data, suiteResults) {
       </header>
 
       <main id="main">
-        <section class="section" id="suites">
+        <section class="section" id="pyramid">
           <div class="section-head">
             <p class="eyebrow"><span class="eyebrow-num">01</span> Coverage</p>
-            <h2>Suites in the pyramid</h2>
+            <h2>The pyramid, live</h2>
             <p class="section-desc">
-              Counts come from JUnit XML or the k6 summary uploaded by the
-              latest successful CI run on <code>main</code>. Tap a card to
-              drill into its full report.
+              Five architectural tiers from pure-logic unit tests up to UI E2E,
+              with two cross-cutting suites for capacity and contract
+              correctness. Counts come from JUnit XML or the k6 summary uploaded
+              by the latest CI run on <code>main</code>. Tap a row for the full
+              report; the GitHub icon jumps to the source dir.
             </p>
           </div>
-          <div class="suite-grid">
-            ${suiteResults.map(renderSuiteCard).join("\n")}
-          </div>
-        </section>
-
-        <section class="section" id="shape">
-          <div class="section-head">
-            <p class="eyebrow"><span class="eyebrow-num">02</span> Architecture</p>
-            <h2>How the lab is shaped</h2>
-            <p class="section-desc">
-              Five core layers validating correctness from pure-logic unit tests
-              up to UI E2E, plus three cross-cutting layers for compliance and
-              capacity &mdash; all targeting one bundled app so the whole
-              pyramid runs offline.
-            </p>
-          </div>
-          ${renderShapeSection()}
+          ${renderPyramidDashboard(buildTiers(suiteResults))}
         </section>
 
         <section class="section" id="sut">
           <div class="section-head">
-            <p class="eyebrow"><span class="eyebrow-num">03</span> System under test</p>
+            <p class="eyebrow"><span class="eyebrow-num">02</span> System under test</p>
             <h2>The app the suites target</h2>
             <p class="section-desc">
               Every count above came from running tests against this exact
@@ -699,6 +845,19 @@ function renderHeroMetrics(totals, ci) {
       </div>`
     : "";
 
+  // Skipped is hidden when 0 to avoid an always-noisy "—" tile. When the
+  // pyramid splits backend by classname some pytest markers (e.g. perf-
+  // marked tests) get skipped, and that needs to be visible so the
+  // pass-rate math reconciles.
+  const skippedTile =
+    totals.skipped > 0
+      ? `
+      <div class="metric" title="Tests reported as skipped by JUnit. Pass rate is computed as passed / (tests − skipped).">
+        <span class="metric-value">${formatInt(totals.skipped)}</span>
+        <span class="metric-label">Skipped</span>
+      </div>`
+      : "";
+
   return `
     <div class="metrics" aria-label="Aggregate test status">
       <div class="metric">
@@ -713,6 +872,7 @@ function renderHeroMetrics(totals, ci) {
         <span class="metric-value">${formatInt(failing)}</span>
         <span class="metric-label">Failing</span>
       </div>
+      ${skippedTile}
       <div class="metric">
         <span class="metric-value">${passRate}</span>
         <span class="metric-label">Pass rate</span>
@@ -740,193 +900,243 @@ function renderHeroMeta(ci, updated) {
   `;
 }
 
-function renderSuiteCard(suite) {
-  if (suite.key === "perf") return renderPerfCard(suite);
-  if (!suite.available || !suite.stats) {
-    return `
-      <article class="suite-card suite-card--idle">
-        <div class="suite-card-head">
-          <span class="layer-pill">${escapeHtml(suite.layer)}</span>
-          <span class="status-chip status-chip--idle">no data yet</span>
-        </div>
-        <h3>${escapeHtml(suite.title)}</h3>
-        <p class="suite-tools">${escapeHtml(suite.tools)}</p>
-        <p class="suite-empty">Run the workflow on <code>main</code> to populate this card.</p>
-        ${renderSuiteFoot(suite, "Open details")}
-      </article>
-    `;
-  }
-  const status = suiteStatus(suite.stats);
-  const passed = passedCount(suite.stats);
-  const failedTotal = suite.stats.failures + suite.stats.errors;
+// ---------------------------------------------------------------------------
+// renderPyramidDashboard
+//
+// Single section that replaces the earlier separate "Suites in the pyramid"
+// grid + "How the lab is shaped" SVG. The pyramid IS the dashboard: each
+// architectural tier is a band sized as a percentage of the container width
+// (38% top → 100% bottom), and each band hosts one or more suite sub-rows
+// with live stats and click-through to the full report. Cross-cutting
+// suites (Contract, Performance) get an outrigger card column on the side
+// because they aren't pyramid tiers — they validate qualities that span
+// every tier.
+// ---------------------------------------------------------------------------
+
+function renderPyramidDashboard({ tiers, crosscut }) {
+  const totalSuites = tiers.reduce((sum, t) => sum + t.rows.length, 0);
+  const totalTiersWithSuites = tiers.filter((t) => t.rows.length > 0).length;
+
   return `
-    <article class="suite-card suite-card--${status.klass}">
-      <div class="suite-card-head">
-        <span class="layer-pill">${escapeHtml(suite.layer)}</span>
-        <span class="status-chip status-chip--${status.klass}">${status.label}</span>
+    <div class="lab-pyramid">
+      <div class="lab-pyramid-main">
+        <div class="lab-pyramid-cap">
+          <span class="eyebrow eyebrow--tiny" aria-hidden="true">Targets the SUT &darr;</span>
+          <p class="lab-pyramid-title">
+            ${totalTiersWithSuites} architectural tier${totalTiersWithSuites === 1 ? "" : "s"} &middot;
+            ${totalSuites} suite${totalSuites === 1 ? "" : "s"}
+          </p>
+        </div>
+        <ol class="lab-pyramid-stack" aria-label="Test pyramid tiers, narrowest at top">
+          ${tiers.map(renderTierBand).join("\n")}
+        </ol>
       </div>
-      <h3>${escapeHtml(suite.title)}</h3>
-      <p class="suite-tools">${escapeHtml(suite.tools)}</p>
-      <div class="suite-stats">
-        <div><span class="num">${formatInt(suite.stats.tests)}</span><span>tests</span></div>
-        <div class="ok"><span class="num">${formatInt(passed)}</span><span>passing</span></div>
-        <div class="${failedTotal > 0 ? "bad" : ""}"><span class="num">${formatInt(failedTotal)}</span><span>failing</span></div>
-        <div><span class="num">${formatInt(suite.stats.skipped)}</span><span>skipped</span></div>
-        <div><span class="num">${formatDuration(suite.stats.time)}</span><span>duration</span></div>
-        <div><span class="num">${suite.stats.tests > 0 ? `${Math.round((passed / Math.max(1, suite.stats.tests - suite.stats.skipped)) * 100)}%` : "—"}</span><span>pass rate</span></div>
-      </div>
-      ${renderSuiteFoot(suite, "Open report")}
-    </article>
+      ${renderCrossCutOutrigger(crosscut)}
+    </div>
   `;
 }
 
-function renderPerfCard(suite) {
-  if (!suite.available || !suite.perf) {
-    return `
-      <article class="suite-card suite-card--idle">
-        <div class="suite-card-head">
-          <span class="layer-pill">${escapeHtml(suite.layer)}</span>
-          <span class="status-chip status-chip--idle">no data yet</span>
-        </div>
-        <h3>${escapeHtml(suite.title)}</h3>
-        <p class="suite-tools">${escapeHtml(suite.tools)}</p>
-        <p class="suite-empty">Perf workflow hasn&rsquo;t uploaded a summary yet.</p>
-        ${renderSuiteFoot(suite, "Open details")}
-      </article>
-    `;
-  }
-  const p = suite.perf;
-  const klass = p.thresholds_passed ? "ok" : "bad";
-  const label = p.thresholds_passed ? "thresholds OK" : "thresholds violated";
+function renderTierBand(tier) {
+  const hasRows = tier.rows.length > 0;
   return `
-    <article class="suite-card suite-card--${klass}">
-      <div class="suite-card-head">
-        <span class="layer-pill">${escapeHtml(suite.layer)}</span>
-        <span class="status-chip status-chip--${klass}">${label}</span>
+    <li
+      class="lab-tier lab-tier--${tier.key} lab-tier--${tier.status.klass} ${hasRows && tier.rows.length > 1 ? "lab-tier--multi" : ""}"
+      style="--w: ${tier.widthPct}%"
+    >
+      <div class="lab-tier-head">
+        <div class="lab-tier-id">
+          <span class="lab-tier-name">${escapeHtml(tier.label)}</span>
+          ${
+            hasRows
+              ? `<span class="lab-tier-count">${tier.rows.length} suite${tier.rows.length === 1 ? "" : "s"}</span>`
+              : `<span class="lab-tier-count lab-tier-count--idle">no suite yet</span>`
+          }
+        </div>
+        <span class="status-chip status-chip--${tier.status.klass}">${escapeHtml(tier.status.label)}</span>
       </div>
-      <h3>${escapeHtml(suite.title)}</h3>
-      <p class="suite-tools">${escapeHtml(suite.tools)}</p>
-      <div class="suite-stats">
-        <div><span class="num">${formatInt(p.request_count ?? 0)}</span><span>requests</span></div>
-        <div class="${p.failed_rate > 0 ? "bad" : "ok"}"><span class="num">${formatPct(p.failed_rate)}</span><span>error rate</span></div>
-        <div><span class="num">${formatMs(p.avg_ms)}</span><span>avg</span></div>
-        <div><span class="num">${formatMs(p.p95_ms)}</span><span>p95</span></div>
-        <div><span class="num">${formatMs(p.p99_ms)}</span><span>p99</span></div>
-        <div><span class="num">${formatMs(p.max_ms)}</span><span>max</span></div>
-      </div>
-      ${renderSuiteFoot(suite, "Open report")}
-    </article>
+      ${
+        hasRows
+          ? `<ul class="lab-tier-rows">${tier.rows.map(renderTierRow).join("")}</ul>`
+          : `<p class="lab-tier-empty">Reserved for future <code>${escapeHtml(tier.label)}</code> coverage.</p>`
+      }
+    </li>
   `;
 }
 
-// Footer with two CTAs: the primary report link uses ::after to extend
-// the click target across the whole card (matching the portfolio's
-// .project-card-primary pattern); the secondary source link uses
-// z-index: 1 so a click on it wins over the extender and opens the
-// directory on GitHub in a new tab. Suite name in the aria-label so
-// screen readers don't hear seven identical "Source" links in a row.
-function renderSuiteFoot(suite, primaryLabel) {
+function renderTierRow(row) {
+  // Cross-cutting perf rows are rendered by renderCrossCutCard instead;
+  // tier rows are always backed by JUnit stats.
+  const stats = row.stats ?? { tests: 0, failures: 0, errors: 0, skipped: 0 };
+  const passing = passedCount(stats);
+  const failing = stats.failures + stats.errors;
+  const denom = Math.max(stats.tests - stats.skipped, 1);
+  const passPct = stats.tests > 0 ? Math.round((passing / denom) * 100) : null;
+
+  const failChip =
+    failing > 0
+      ? `<span class="lab-row-stat lab-row-stat--bad"><strong>${formatInt(failing)}</strong> <em>fail</em></span>`
+      : "";
+  const skipChip =
+    stats.skipped > 0
+      ? `<span class="lab-row-stat lab-row-stat--idle"><strong>${formatInt(stats.skipped)}</strong> <em>skip</em></span>`
+      : "";
+
   return `
-    <div class="suite-card-foot">
-      <a class="suite-card-primary suite-cta" href="${escapeAttr(suite.detailUrl)}">
-        ${escapeHtml(primaryLabel)} <span class="arrow">&rarr;</span>
+    <li class="lab-row lab-row--${row.status.klass}">
+      <a class="lab-row-primary" href="${escapeAttr(row.detailUrl)}" aria-label="Open ${escapeAttr(row.title)} report">
+        <div class="lab-row-id">
+          <span class="lab-row-name">${escapeHtml(row.title)}</span>
+          <span class="lab-row-tools">${escapeHtml(row.tools)}</span>
+        </div>
+        <div class="lab-row-stats" role="presentation">
+          <span class="lab-row-stat"><strong>${formatInt(stats.tests)}</strong> <em>tests</em></span>
+          ${failChip}
+          ${skipChip}
+          ${
+            passPct !== null
+              ? `<span class="lab-row-stat lab-row-stat--accent"><strong>${passPct}%</strong> <em>pass</em></span>`
+              : ""
+          }
+        </div>
       </a>
       <a
-        class="suite-card-source"
-        href="${escapeAttr(suite.sourceHref)}"
+        class="lab-row-source"
+        href="${escapeAttr(row.sourceHref)}"
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="${escapeAttr(suite.title)} source on GitHub"
+        title="Open ${escapeAttr(row.title)} source on GitHub"
       >
-        Source <span class="arrow-ext" aria-hidden="true">&#x2197;</span>
+        <span aria-hidden="true">${"\u2197"}</span>
+        <span class="visually-hidden">Open ${escapeHtml(row.title)} source on GitHub</span>
       </a>
-    </div>
+    </li>
   `;
 }
 
-function renderShapeSection() {
+function renderCrossCutOutrigger(crosscut) {
+  if (crosscut.length === 0) return "";
   return `
-    <div class="shape-grid">
-      <div class="shape-card">
-        <h3>Five core layers, three cross-cutting</h3>
+    <aside class="lab-crosscut" aria-labelledby="lab-crosscut-title">
+      <header class="lab-crosscut-head">
+        <h3 id="lab-crosscut-title">Cross-cutting</h3>
         <p>
-          Most test-automation portfolios show one framework against a
-          synthetic API. This repo shows how a staff-level SDET thinks across
-          the whole pyramid &mdash; five test layers validating correctness
-          from pure-logic unit tests up to UI E2E, plus three cross-cutting
-          layers for compliance and capacity.
+          Suites that validate qualities running through every tier &mdash; not
+          a pyramid layer of their own.
         </p>
-        <p>
-          Each framework is used in its own idiom: POM in Playwright, app
-          actions in Cypress, abstract clients in pytest, MSW for the
-          component layer &mdash; all targeting one bundled FastAPI + React
-          app so the whole pyramid runs offline.
-        </p>
+      </header>
+      <div class="lab-crosscut-list">
+        ${crosscut.map(renderCrossCutCard).join("\n")}
       </div>
-      <figure class="shape-pyramid" aria-label="Test pyramid for qa-automation-lab">
-        ${renderPyramidSvg()}
-      </figure>
-    </div>
+    </aside>
   `;
 }
 
-function renderPyramidSvg() {
-  // Same SVG language as the portfolio's hero pyramid — slate→wine
-  // glossy gradients with a strong upper highlight and a deep lower
-  // shadow so the slices read as 3D rather than flat bands. Five core
-  // tiers (UI, API, Component, Integration, Unit) matching the lab.
+function renderCrossCutCard(suite) {
+  if (suite.key === "perf") return renderCrossCutPerfCard(suite);
+  return renderCrossCutContractCard(suite);
+}
+
+function renderCrossCutContractCard(suite) {
+  const eyebrow = CROSSCUT_EYEBROWS[suite.key] ?? "Cross-cutting";
+  if (!suite.available || !suite.stats) {
+    return `
+      <article class="lab-cross-card lab-cross-card--idle">
+        <header class="lab-cross-card-head">
+          <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
+          <span class="status-chip status-chip--idle">awaiting CI</span>
+        </header>
+        <h4>${escapeHtml(suite.title)}</h4>
+        <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
+        <p class="lab-cross-empty">First successful run will populate this card.</p>
+        <div class="lab-cross-actions">
+          <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
+            Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
+          </a>
+        </div>
+      </article>
+    `;
+  }
+  const stats = suite.stats;
+  const passing = passedCount(stats);
+  const failing = stats.failures + stats.errors;
+  const denom = Math.max(stats.tests - stats.skipped, 1);
+  const passPct = stats.tests > 0 ? Math.round((passing / denom) * 100) : 0;
+  const status = suiteStatus(stats);
   return `
-    <svg
-      class="pyramid-svg"
-      viewBox="0 0 240 240"
-      role="img"
-      aria-label="Test pyramid: UI, API, Component, Integration, Unit"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <linearGradient id="lab-grad-ui" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(200,210,235,0.95)" />
-          <stop offset="40%" stop-color="rgba(106,115,146,0.88)" />
-          <stop offset="100%" stop-color="rgba(50,55,75,0.65)" />
-        </linearGradient>
-        <linearGradient id="lab-grad-api" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(170,172,212,0.95)" />
-          <stop offset="40%" stop-color="rgba(78,79,115,0.88)" />
-          <stop offset="100%" stop-color="rgba(40,42,68,0.66)" />
-        </linearGradient>
-        <linearGradient id="lab-grad-component" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(185,140,180,0.94)" />
-          <stop offset="40%" stop-color="rgba(90,53,88,0.9)" />
-          <stop offset="100%" stop-color="rgba(48,22,46,0.7)" />
-        </linearGradient>
-        <linearGradient id="lab-grad-integration" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(175,120,150,0.95)" />
-          <stop offset="40%" stop-color="rgba(82,42,67,0.92)" />
-          <stop offset="100%" stop-color="rgba(40,16,32,0.74)" />
-        </linearGradient>
-        <linearGradient id="lab-grad-unit" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(165,105,125,0.96)" />
-          <stop offset="40%" stop-color="rgba(74,31,45,0.95)" />
-          <stop offset="100%" stop-color="rgba(35,10,18,0.78)" />
-        </linearGradient>
-      </defs>
-      <g class="pyramid-slices">
-        <path class="pyramid-slice" d="M 122.15 18.51 L 137.85 51.49 Q 140 56 135 56 L 105 56 Q 100 56 102.15 51.49 L 117.85 18.51 Q 120 14 122.15 18.51 Z" fill="url(#lab-grad-ui)" />
-        <path class="pyramid-slice" d="M 105 56 L 135 56 Q 140 56 142.15 60.51 L 157.85 93.49 Q 160 98 155 98 L 85 98 Q 80 98 82.15 93.49 L 97.85 60.51 Q 100 56 105 56 Z" fill="url(#lab-grad-api)" />
-        <path class="pyramid-slice" d="M 85 98 L 155 98 Q 160 98 162.15 102.51 L 177.85 135.49 Q 180 140 175 140 L 65 140 Q 60 140 62.15 135.49 L 77.85 102.51 Q 80 98 85 98 Z" fill="url(#lab-grad-component)" />
-        <path class="pyramid-slice" d="M 65 140 L 175 140 Q 180 140 182.15 144.51 L 197.85 177.49 Q 200 182 195 182 L 45 182 Q 40 182 42.15 177.49 L 57.85 144.51 Q 60 140 65 140 Z" fill="url(#lab-grad-integration)" />
-        <path class="pyramid-slice" d="M 45 182 L 195 182 Q 200 182 202.15 186.51 L 217.85 219.49 Q 220 224 215 224 L 25 224 Q 20 224 22.15 219.49 L 37.85 186.51 Q 40 182 45 182 Z" fill="url(#lab-grad-unit)" />
-      </g>
-      <g class="pyramid-slice-labels">
-        <text x="120" y="46">UI</text>
-        <text x="120" y="80">API</text>
-        <text x="120" y="123">Component</text>
-        <text x="120" y="165">Integration</text>
-        <text x="120" y="207">Unit</text>
-      </g>
-    </svg>
+    <article class="lab-cross-card lab-cross-card--${status.klass}">
+      <header class="lab-cross-card-head">
+        <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
+        <span class="status-chip status-chip--${status.klass}">${escapeHtml(status.label)}</span>
+      </header>
+      <h4>${escapeHtml(suite.title)}</h4>
+      <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
+      <ul class="lab-cross-stats">
+        <li><strong>${formatInt(stats.tests)}</strong> <em>tests</em></li>
+        ${failing > 0 ? `<li class="bad"><strong>${formatInt(failing)}</strong> <em>fail</em></li>` : ""}
+        <li class="accent"><strong>${passPct}%</strong> <em>pass</em></li>
+      </ul>
+      <div class="lab-cross-actions">
+        <a class="lab-cross-primary" href="${escapeAttr(suite.detailUrl)}">View report &rarr;</a>
+        <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
+          Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
+        </a>
+      </div>
+    </article>
   `;
 }
+
+function renderCrossCutPerfCard(suite) {
+  const eyebrow = CROSSCUT_EYEBROWS[suite.key] ?? "Cross-cutting";
+  if (!suite.available || !suite.perf) {
+    return `
+      <article class="lab-cross-card lab-cross-card--idle">
+        <header class="lab-cross-card-head">
+          <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
+          <span class="status-chip status-chip--idle">awaiting CI</span>
+        </header>
+        <h4>${escapeHtml(suite.title)}</h4>
+        <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
+        <p class="lab-cross-empty">Dispatch <code>perf.yml</code> to populate this card.</p>
+        <div class="lab-cross-actions">
+          <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
+            Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
+          </a>
+        </div>
+      </article>
+    `;
+  }
+  const perf = suite.perf;
+  const klass = perf.thresholds_passed ? "ok" : "bad";
+  const statusLabel = perf.thresholds_passed
+    ? "thresholds OK"
+    : "thresholds violated";
+  return `
+    <article class="lab-cross-card lab-cross-card--${klass}">
+      <header class="lab-cross-card-head">
+        <span class="lab-cross-eyebrow">${escapeHtml(eyebrow)}</span>
+        <span class="status-chip status-chip--${klass}">${escapeHtml(statusLabel)}</span>
+      </header>
+      <h4>${escapeHtml(suite.title)}</h4>
+      <p class="lab-cross-tools">${escapeHtml(suite.tools)}</p>
+      <ul class="lab-cross-stats">
+        <li><strong>${formatInt(perf.request_count ?? 0)}</strong> <em>reqs</em></li>
+        <li><strong>${formatMs(perf.p95_ms)}</strong> <em>p95</em></li>
+        <li class="${perf.failed_rate > 0 ? "bad" : ""}"><strong>${formatPct(perf.failed_rate)}</strong> <em>err</em></li>
+      </ul>
+      <div class="lab-cross-actions">
+        <a class="lab-cross-primary" href="${escapeAttr(suite.detailUrl)}">View report &rarr;</a>
+        <a class="lab-cross-source" href="${escapeAttr(suite.sourceHref)}" target="_blank" rel="noopener noreferrer">
+          Source <span class="arrow-ext" aria-hidden="true">${"\u2197"}</span>
+        </a>
+      </div>
+    </article>
+  `;
+}
+
+const CROSSCUT_EYEBROWS = {
+  contract: "Contract",
+  perf: "Performance",
+};
 
 function humanAgo(date) {
   if (!date || isNaN(date.getTime())) return "just now";
@@ -1421,3 +1631,6 @@ function escapeAttr(s) {
 function cpRecursiveSync(src, dest) {
   cpSync(src, dest, { recursive: true });
 }
+
+// All declarations are in scope now; run main.
+await main();
