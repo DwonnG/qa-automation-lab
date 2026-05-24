@@ -9,7 +9,16 @@ PinStr = Annotated[
     str,
     StringConstraints(min_length=6, max_length=6, pattern=r"^[0-9]{6}$"),
 ]
-ItemName = Annotated[str, StringConstraints(min_length=1, max_length=80, strip_whitespace=True)]
+# `strip_whitespace=True` runs before length checks, so an all-whitespace
+# input like "\r" collapses to "" and fails `min_length=1`. The `pattern`
+# (compiled to `re.search`, i.e. "contains at least one non-whitespace
+# char") makes that constraint explicit in the published OpenAPI schema,
+# which prevents schemathesis from generating "schema-compliant" inputs
+# the backend would in fact reject as 422.
+ItemName = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=80, strip_whitespace=True, pattern=r"\S"),
+]
 
 
 def _coerce_quantity(value: Any) -> Any:
