@@ -39,13 +39,19 @@ jobs:
           done
           docker logs qal-perf
           exit 1
+      # Install k6 as a host binary instead of using grafana/k6-action,
+      # which runs k6 in its own Docker container. In that container,
+      # `localhost:5050` resolves to the container's own loopback and
+      # cannot reach the demo backend on the runner host. The host
+      # binary shares the same network namespace as the backend
+      # container's published port, so the existing BASE_URL works.
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
       - name: Run k6 smoke
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: perf/items_smoke.js
         env:
           BASE_URL: http://localhost:5050
           SUMMARY_FILE: perf/summary.json
+        run: k6 run perf/items_smoke.js
       - name: Stop container
         if: always()
         run: docker stop qal-perf || true

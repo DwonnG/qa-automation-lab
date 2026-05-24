@@ -214,6 +214,24 @@ function collectSuite(suite, artifactsDir) {
     if (existsSync(summaryPath)) {
       try {
         result.perf = JSON.parse(readFileSync(summaryPath, "utf8"));
+        // Project the k6 threshold result into a single synthetic
+        // "test" so the hero status badge, suite count, and the
+        // tests/passing/failing/pass-rate tiles reflect a red perf
+        // card. Without this, a perf regression is invisible above
+        // the fold because aggregate() only sums JUnit stats.
+        //
+        // time stays 0 on purpose: the "Test time" tile is
+        // documented as the sum of <testcase time="..."> across
+        // every JUnit suite, and folding in k6's 30 s ramp+hold
+        // would muddle that meaning. The perf card itself still
+        // shows the full request / latency breakdown.
+        result.stats = {
+          tests: 1,
+          failures: result.perf.thresholds_passed ? 0 : 1,
+          errors: 0,
+          skipped: 0,
+          time: 0,
+        };
       } catch (err) {
         console.warn(
           `[build-pages] failed to parse k6 summary: ${err.message}`,
