@@ -542,7 +542,9 @@ function suiteRowFromResult(r) {
     stats: r.stats,
     detailUrl: r.detailUrl,
     sourceHref: r.sourceHref,
-    status: r.stats ? suiteStatus(r.stats) : { label: "no data yet", klass: "idle" },
+    status: r.stats
+      ? suiteStatus(r.stats)
+      : { label: "no data yet", klass: "idle" },
     available: r.available && Boolean(r.stats),
   };
 }
