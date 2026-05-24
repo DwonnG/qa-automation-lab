@@ -32,7 +32,7 @@ RATE_LIMIT_PER_HOUR = "5"
 # the returned id below before deploying.
 [[kv_namespaces]]
 binding = "DISPATCH_KV"
-id = "REPLACE_ME_WITH_WRANGLER_OUTPUT"
+id = "9e800d8bbb5e4b4691831e102f766e9a"
 
 # Required secret: a fine-scoped Personal Access Token with only
 # `actions:write` and `actions:read` on this repository. Set with:
