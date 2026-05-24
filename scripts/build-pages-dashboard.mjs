@@ -1290,6 +1290,7 @@ function baseLayout({ title, body }) {
         <span>automation-lab</span>
       </a>
       <div class="nav-links">
+        <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
         <a href="${PAGES_BASE}/#suites">Suites</a>
         <a href="${PAGES_BASE}/#shape">Architecture</a>
         <a href="${PAGES_BASE}/#sut">SUT</a>
