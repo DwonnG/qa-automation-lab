@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>404 &middot; qa-automation-lab</title>
+    <link rel="icon" type="image/svg+xml" href="/qa-automation-lab/favicon.svg" />
+    <meta name="theme-color" content="#0a0a0d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7fa" media="(prefers-color-scheme: light)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var systemLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+          var theme = saved || (systemLight ? "light" : "dark");
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/qa-automation-lab/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--a" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--b" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--c" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--d" aria-hidden="true"></div>
+
+    <nav class="top-nav" aria-label="Site">
+      <a class="nav-brand" href="/qa-automation-lab/">
+        <span class="nav-brand-mark" aria-hidden="true">QA</span>
+        <span>automation-lab</span>
+      </a>
+    </nav>
+
+    <main class="detail" id="main" style="text-align: center">
+      <header class="detail-head" style="margin-top: 2rem">
+        <p class="eyebrow"><span class="eyebrow-num">404</span> Not found</p>
+        <h1>This page isn&rsquo;t in the lab</h1>
+        <p class="lede" style="margin-left: auto; margin-right: auto; max-width: 50ch">
+          The page you were looking for isn&rsquo;t here. The dashboard and
+          the SUT are linked below.
+        </p>
+        <div class="hero-actions" style="justify-content: center">
+          <a class="btn btn--primary" href="/qa-automation-lab/">Back to dashboard</a>
+          <a class="btn btn--ghost" href="/qa-automation-lab/demo/">Try the SUT</a>
+        </div>
+      </header>
+    </main>
+
+    <button class="theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
+      <svg class="theme-toggle__icon theme-toggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </svg>
+      <svg class="theme-toggle__icon theme-toggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </svg>
+    </button>
+
+    <script src="/qa-automation-lab/app.js" defer></script>
+  </body>
+</html>

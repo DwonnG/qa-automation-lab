@@ -1,0 +1,180 @@
+name: pages
+
+on:
+  # Trigger after a successful CI run on main so we can pull its artifacts
+  # (Playwright report, coverage, JUnit XMLs, etc.) into the dashboard.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  # Manual trigger for first-time setup and re-deploys without waiting for CI.
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+# Required by actions/deploy-pages and for cross-workflow artifact downloads.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.0.0"
+  PAGES_BASE: /qa-automation-lab
+  # Each artifact name below MUST match what ci.yml / perf.yml upload.
+  CI_ARTIFACTS: |
+    demo-app-reports
+    web-coverage
+    web-junit
+    pytest-api-report
+    schemathesis-report
+    playwright-report
+    cypress-artifacts
+  PERF_ARTIFACTS: |
+    k6-summary
+
+jobs:
+  build:
+    # Skip if the upstream CI run did not succeed; still allow manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web deps
+        working-directory: web
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Build web demo (MSW mode, Pages base)
+        working-directory: web
+        env:
+          VITE_BASE: ${{ env.PAGES_BASE }}/demo/
+          VITE_USE_MOCKS: "true"
+        run: pnpm build
+
+      - name: Resolve CI run id to pull artifacts from
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            ci_run_id="${{ github.event.workflow_run.id }}"
+            ci_run_url="${{ github.event.workflow_run.html_url }}"
+            ci_sha="${{ github.event.workflow_run.head_sha }}"
+            ci_at="${{ github.event.workflow_run.updated_at }}"
+          else
+            ci_run_id="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json databaseId --jq '.[0].databaseId')"
+            ci_run_url="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json url --jq '.[0].url')"
+            ci_sha="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json headSha --jq '.[0].headSha')"
+            ci_at="$(gh run list --workflow=ci.yml --branch=main --status=success --limit=1 --json updatedAt --jq '.[0].updatedAt')"
+          fi
+          perf_run_id="$(gh run list --workflow=perf.yml --branch=main --status=success --limit=1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+          echo "ci_run_id=${ci_run_id:-}" >> "$GITHUB_OUTPUT"
+          echo "ci_run_url=${ci_run_url:-}" >> "$GITHUB_OUTPUT"
+          echo "ci_sha=${ci_sha:-}" >> "$GITHUB_OUTPUT"
+          echo "ci_at=${ci_at:-}" >> "$GITHUB_OUTPUT"
+          echo "perf_run_id=${perf_run_id:-}" >> "$GITHUB_OUTPUT"
+
+      - name: Download CI artifacts
+        if: steps.resolve.outputs.ci_run_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.resolve.outputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p _artifacts
+          while IFS= read -r name; do
+            name="$(echo "$name" | xargs)"
+            [ -z "$name" ] && continue
+            echo "::group::Download $name from CI run $RUN_ID"
+            gh run download "$RUN_ID" --name "$name" --dir "_artifacts/$name" \
+              || echo "::warning::artifact $name not present in CI run $RUN_ID"
+            echo "::endgroup::"
+          done <<EOF
+          ${{ env.CI_ARTIFACTS }}
+          EOF
+
+      - name: Download perf artifacts
+        if: steps.resolve.outputs.perf_run_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.resolve.outputs.perf_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p _artifacts
+          while IFS= read -r name; do
+            name="$(echo "$name" | xargs)"
+            [ -z "$name" ] && continue
+            echo "::group::Download $name from perf run $RUN_ID"
+            gh run download "$RUN_ID" --name "$name" --dir "_artifacts/$name" \
+              || echo "::warning::artifact $name not present in perf run $RUN_ID"
+            echo "::endgroup::"
+          done <<EOF
+          ${{ env.PERF_ARTIFACTS }}
+          EOF
+
+      - name: Write CI metadata for the dashboard
+        run: |
+          set -euo pipefail
+          mkdir -p _artifacts/ci-meta
+          short_sha="$(echo "${{ steps.resolve.outputs.ci_sha }}" | cut -c1-7)"
+          cat > _artifacts/ci-meta/meta.json <<JSON
+          {
+            "sha": "${{ steps.resolve.outputs.ci_sha }}",
+            "short_sha": "${short_sha}",
+            "ref": "main",
+            "run_id": "${{ steps.resolve.outputs.ci_run_id }}",
+            "run_url": "${{ steps.resolve.outputs.ci_run_url }}",
+            "triggered_at": "${{ steps.resolve.outputs.ci_at }}"
+          }
+          JSON
+
+      - name: Build dashboard
+        env:
+          PAGES_BASE: ${{ env.PAGES_BASE }}
+        run: |
+          node scripts/build-pages-dashboard.mjs \
+            --artifacts-dir _artifacts \
+            --web-dist web/dist \
+            --pages-dir pages \
+            --out _site
+
+      - name: Inspect generated site
+        run: |
+          set -euo pipefail
+          ls -la _site
+          echo "---"
+          ls -la _site/reports || true
+          echo "---"
+          find _site -maxdepth 3 -type f | head -50
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

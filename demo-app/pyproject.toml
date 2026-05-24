@@ -39,6 +39,7 @@ addopts = [
   "--cov=demo_app",
   "--cov-report=term-missing",
   "--cov-report=xml",
+  "--cov-report=html:htmlcov",
   "--cov-branch",
 ]
 

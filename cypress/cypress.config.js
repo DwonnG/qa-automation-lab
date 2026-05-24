@@ -3,6 +3,16 @@ import { defineConfig } from "cypress";
 const BASE_URL = process.env.CYPRESS_BASE_URL ?? "http://localhost:5050";
 
 export default defineConfig({
+  // Stack the spec reporter (console output during runs) with mocha-junit-reporter
+  // (machine-readable JUnit XML consumed by the GitHub Pages dashboard build).
+  reporter: "cypress-multi-reporters",
+  reporterOptions: {
+    reporterEnabled: "spec, mocha-junit-reporter",
+    mochaJunitReporterReporterOptions: {
+      mochaFile: "results/junit-[hash].xml",
+      toConsole: false,
+    },
+  },
   e2e: {
     baseUrl: BASE_URL,
     specPattern: "cypress/e2e/**/*.cy.js",

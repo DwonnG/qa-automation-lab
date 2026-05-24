@@ -14,6 +14,7 @@ coverage.xml
 # Vitest / Istanbul HTML coverage output
 coverage/
 htmlcov/
+demo-app/htmlcov/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -30,11 +31,27 @@ node_modules/
 # Build outputs
 web/dist/
 web/build/
+web/junit.xml
 playwright-report/
 test-results/
 cypress/screenshots/
 cypress/videos/
 cypress/downloads/
+cypress/results/
+
+# GitHub Pages staging (assembled by .github/workflows/pages.yml, also used
+# for local smoke tests of the Pages site).
+_site/
+_site_serve/
+# Preview-pages.sh stages CI-equivalent artifacts here before invoking the
+# dashboard build script. Regenerated on every run; never committed.
+_artifacts/
+
+# JUnit XML emitted by the test runners. Picked up by CI as artifacts and
+# fed to the dashboard build, but always regenerated locally — never tracked.
+**/report.xml
+**/results.xml
+**/junit.xml
 
 # IDE
 .vscode/

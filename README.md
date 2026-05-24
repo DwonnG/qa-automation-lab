@@ -1,18 +1,28 @@
 # qa-automation-lab
 
-A self-contained, multi-framework test automation lab demonstrating a full test pyramid plus orthogonal contract, accessibility, and performance coverage against one bundled FastAPI + React demo app.
+A self-contained, multi-framework test automation lab demonstrating a full test pyramid plus cross-cutting contract, accessibility, and performance coverage against one bundled React + FastAPI system under test (SUT).
 
 [![CI](https://github.com/DwonnG/qa-automation-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/DwonnG/qa-automation-lab/actions/workflows/ci.yml)
+[![Pages](https://github.com/DwonnG/qa-automation-lab/actions/workflows/pages.yml/badge.svg)](https://github.com/DwonnG/qa-automation-lab/actions/workflows/pages.yml)
 [![Backend coverage](https://img.shields.io/badge/backend%20coverage-84%25-brightgreen)](./demo-app)
 [![Frontend coverage](https://img.shields.io/badge/frontend%20coverage-80%25-brightgreen)](./web)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> **Dashboard & live SUT:** [dwonng.github.io/qa-automation-lab](https://dwonng.github.io/qa-automation-lab/) — auto-published reports for every suite (Backend, Web component, API E2E, Contract, Playwright, Cypress, k6) from the latest CI run on `main`, plus an interactive build of the React half of the SUT itself (FastAPI swapped for MSW so it runs on a static host). PIN: `000000`.
+>
+> Preview the dashboard locally before pushing:
+>
+> ```bash
+> ./scripts/preview-pages.sh
+> # → http://localhost:8765/qa-automation-lab/
+> ```
 
 ## Why this repo exists
 
 Most test-automation portfolios show one framework against a synthetic API. This repo shows how a staff-level SDET thinks across the whole pyramid:
 
 - **Five test layers** validating correctness from pure-logic unit tests up to UI E2E
-- **Three orthogonal layers** validating compliance and capacity (contract, a11y, performance)
+- **Three cross-cutting layers** validating compliance and capacity (contract, a11y, performance)
 - **Each framework used in its own idiom** — POM in Playwright, App Actions in Cypress, abstract clients in pytest
 - **One bundled target app** so the whole pyramid runs offline on any machine
 

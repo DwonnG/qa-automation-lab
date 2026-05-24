@@ -65,6 +65,7 @@ jobs:
           path: |
             demo-app/coverage.xml
             demo-app/report.xml
+            demo-app/htmlcov
 
   web-tests:
     name: web (component + build)
@@ -87,7 +88,7 @@ jobs:
         run: pnpm lint
       - name: Tests
         working-directory: web
-        run: pnpm test
+        run: pnpm test:ci
       - name: Build
         working-directory: web
         run: pnpm build
@@ -96,6 +97,11 @@ jobs:
         with:
           name: web-coverage
           path: web/coverage
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: web-junit
+          path: web/junit.xml
       - uses: actions/upload-artifact@v7
         with:
           name: web-dist
@@ -321,6 +327,7 @@ jobs:
           path: |
             cypress/cypress/screenshots
             cypress/cypress/videos
+            cypress/results
 
   docker-build:
     name: docker-build

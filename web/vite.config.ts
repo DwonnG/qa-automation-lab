@@ -7,7 +7,13 @@ import { defineConfig } from "vite";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+// VITE_BASE lets the GitHub Pages workflow build with a subpath (e.g.
+// "/qa-automation-lab/demo/") without affecting local dev or the bundled
+// single-port FastAPI deployment, which both serve from "/".
+const base = process.env.VITE_BASE ?? "/";
+
 export default defineConfig({
+  base,
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

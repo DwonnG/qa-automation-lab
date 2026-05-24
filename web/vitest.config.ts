@@ -24,8 +24,11 @@ export default defineConfig({
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.test.{ts,tsx}",
+        "src/**/*.d.ts",
         "src/main.tsx",
         "src/components/ui/**",
+        // Demo-only mocks; exercised by the Pages build, not unit tests.
+        "src/mocks/**",
       ],
     },
   },
