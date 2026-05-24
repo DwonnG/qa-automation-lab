@@ -130,7 +130,10 @@ export const handlers = [
     // See docs/defects/negative_qty_allowed.md.
     let quantity: number | null;
     if (defectEnabled("negative_qty_allowed")) {
-      const n = typeof body.quantity === "number" ? body.quantity : Number(body.quantity);
+      const n =
+        typeof body.quantity === "number"
+          ? body.quantity
+          : Number(body.quantity);
       quantity = Number.isFinite(n) && Number.isInteger(n) ? n : null;
     } else {
       quantity = clampQuantity(body.quantity);

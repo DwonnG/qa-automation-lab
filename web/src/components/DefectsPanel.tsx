@@ -10,7 +10,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { KNOWN_DEFECTS, activeDefects, setDefects, type DefectId } from "@/lib/defects";
+import {
+  KNOWN_DEFECTS,
+  activeDefects,
+  setDefects,
+  type DefectId,
+} from "@/lib/defects";
 
 const LABELS: Record<DefectId, string> = {
   login_accepts_any_pin: "Login accepts any 6-digit PIN",

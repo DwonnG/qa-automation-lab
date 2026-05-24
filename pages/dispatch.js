@@ -282,7 +282,10 @@
   }
 
   function renderRunResult(runId, tiers, data) {
-    var base = (data.bundle_url || RUNS_BASE + runId + "/").replace(/\/?$/, "/");
+    var base = (data.bundle_url || RUNS_BASE + runId + "/").replace(
+      /\/?$/,
+      "/",
+    );
     Promise.all([
       fetch(base + "agent-feedback.md").then(function (r) {
         return r.ok ? r.text() : "";
@@ -313,7 +316,9 @@
             runId +
             "</span>" +
             (data.run_url
-              ? ' <a href="' + data.run_url + '" target="_blank" rel="noopener">view in Actions ↗</a>'
+              ? ' <a href="' +
+                data.run_url +
+                '" target="_blank" rel="noopener">view in Actions ↗</a>'
               : "") +
             "</header>" +
             '<div class="defect-result-body">' +

@@ -34,9 +34,7 @@ def _active_set() -> frozenset[str]:
     raw = os.environ.get("DEFECTS", "").strip()
     if not raw:
         return frozenset()
-    return frozenset(
-        part.strip() for part in raw.split(",") if part.strip()
-    )
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
 
 
 def enabled(defect_id: str) -> bool:

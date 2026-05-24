@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from demo_app.auth import revoke_all
 from demo_app.paths import (
@@ -70,6 +71,59 @@ def _build_http_exception_handler(spa_enabled: bool):
     return _handler
 
 
+class StrictQueryParamsMiddleware(BaseHTTPMiddleware):
+    """Reject undocumented query parameters on ``/api/*`` routes.
+
+    FastAPI's default behavior is to silently ignore unknown query
+    parameters, which violates the implicit "object with unexpected
+    properties" contract Schemathesis derives from the OpenAPI spec.
+    Rejecting them surfaces typos early and keeps the contract tight.
+    """
+
+    def __init__(self, app, allowed_by_path: dict[tuple[str, str], frozenset[str]]):
+        super().__init__(app)
+        self._allowed = allowed_by_path
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith(API_PREFIX):
+            key = (request.method.upper(), request.url.path)
+            allowed = self._allowed.get(key)
+            if allowed is not None:
+                provided = set(request.query_params.keys())
+                extras = sorted(p for p in provided if p not in allowed)
+                if extras:
+                    return JSONResponse(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        content={
+                            "detail": [
+                                {
+                                    "type": "unexpected_query_parameter",
+                                    "loc": ["query", name],
+                                    "msg": "unexpected query parameter",
+                                }
+                                for name in extras
+                            ]
+                        },
+                    )
+        return await call_next(request)
+
+
+def _allowed_query_params(app: FastAPI) -> dict[tuple[str, str], frozenset[str]]:
+    """Snapshot per-route allowed query param names from the FastAPI router."""
+    from fastapi.routing import APIRoute
+
+    allowed: dict[tuple[str, str], frozenset[str]] = {}
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        names: set[str] = set()
+        for param in route.dependant.query_params:
+            names.add(param.alias or param.name)
+        for method in route.methods or ():
+            allowed[(method.upper(), route.path)] = frozenset(names)
+    return allowed
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="qa-automation-lab demo",
@@ -81,6 +135,11 @@ def create_app() -> FastAPI:
 
     app.state.store = ItemStore()
     app.include_router(router)
+
+    app.add_middleware(
+        StrictQueryParamsMiddleware,
+        allowed_by_path=_allowed_query_params(app),
+    )
 
     spa_available = _INDEX_FILE.exists()
     app.add_exception_handler(

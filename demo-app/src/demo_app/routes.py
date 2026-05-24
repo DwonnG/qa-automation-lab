@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from typing import Annotated
 
@@ -104,9 +105,7 @@ def list_items(
         # Drop the last row of every page; classic off-by-one in pagination
         # math. See docs/defects/off_by_one_pagination.md.
         page_items = page_items[:-1]
-    return [
-        ItemRead(id=i.id, name=i.name, quantity=i.quantity) for i in page_items
-    ]
+    return [ItemRead(id=i.id, name=i.name, quantity=i.quantity) for i in page_items]
 
 
 def _create_with_raw_quantity(raw: dict, store: ItemStore) -> ItemRead:
@@ -135,13 +134,49 @@ def _create_with_raw_quantity(raw: dict, store: ItemStore) -> ItemRead:
     response_model=ItemRead,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_bearer)],
-    responses=_AUTH_RESPONSES,
+    # We intentionally consume the body manually (via Request.json()) so the
+    # `negative_qty_allowed` defect can bypass Pydantic's Ge(0) validator.
+    # FastAPI would normally synthesize the requestBody schema + 422 response
+    # from a `body: ItemCreate` parameter; with that gone we must document
+    # the same contract by hand so the OpenAPI spec keeps matching reality
+    # (Schemathesis fuzzes against the spec and reports drift as a Server
+    # Error otherwise).
+    responses={
+        **_AUTH_RESPONSES,
+        422: {"description": "Validation Error"},
+    },
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    # Inline the schema rather than $ref so we don't depend
+                    # on FastAPI registering ItemCreate in #/components.
+                    "schema": ItemCreate.model_json_schema(),
+                }
+            },
+        },
+    },
 )
 async def create_item(
     request: Request,
     store: Annotated[ItemStore, Depends(get_store)],
 ) -> ItemRead:
-    raw = await request.json()
+    try:
+        raw = await request.json()
+    except json.JSONDecodeError as exc:
+        # Empty body or non-JSON payload. Surface as 422 with the standard
+        # FastAPI envelope rather than letting Starlette bubble it to 500.
+        raise RequestValidationError(
+            [
+                {
+                    "type": "json_invalid",
+                    "loc": ("body",),
+                    "msg": "Invalid JSON body",
+                    "input": None,
+                }
+            ]
+        ) from exc
     if defects.enabled("negative_qty_allowed"):
         return _create_with_raw_quantity(raw, store)
     try:
