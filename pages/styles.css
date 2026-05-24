@@ -801,6 +801,38 @@ code {
   max-width: 60ch;
 }
 
+/* Compact section — used by the pyramid section so the entire
+   heading + body copy + 5-tier stack fits in one viewport on typical
+   laptop screens (no scrolling needed to see Unit at the base).
+   Scoped overrides instead of editing the base .section rules so
+   other sections (SUT, Suites, etc.) keep their normal spacing. */
+.section--compact {
+  padding-top: 1.75rem;
+  padding-bottom: 2rem;
+}
+.section--compact .section-head {
+  margin-bottom: 1rem;
+  max-width: 70ch;
+}
+.section--compact .section-head h2 {
+  font-size: clamp(1.35rem, 2.8vw, 1.7rem);
+  margin-bottom: 0.4rem;
+}
+.section--compact .section-desc {
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.section--compact .lab-pyramid {
+  gap: 0.4rem;
+}
+.section--compact .lab-pyramid-cap {
+  font-size: 0.7rem;
+  padding: 0 0.25rem;
+}
+.section--compact .lab-pyramid-cap .eyebrow--tiny {
+  font-size: 0.58rem;
+}
+
 /* Status chip — used by lab pyramid bands, cross-cutting cards, and the
    per-suite detail pages (failed test rows). */
 
@@ -869,7 +901,15 @@ code {
 .lab-pyramid {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.55rem;
+  /* Cap the pyramid width and center it so the silhouette stays a
+     readable, focused shape on wide displays instead of stretching to
+     the full section width (which made the bands feel oversized and
+     pushed Unit below the fold). Width:100% lets it shrink on narrow
+     viewports; the cap kicks in once the section is wider than ~920px. */
+  width: 100%;
+  max-width: 620px;
+  margin-inline: auto;
 }
 
 .lab-pyramid-cap {
@@ -900,7 +940,7 @@ code {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
   align-items: center; /* Each band centers itself within the column. */
   /* A soft directional shadow under the whole stack reads as the
      pyramid casting a shadow on a surface — adds depth without
@@ -917,9 +957,9 @@ code {
   width: var(--w, 100%);
   /* On very narrow viewports the gradation gets too dense to be readable.
      Snap to a usable floor so even UI (38%) shows full content widths. */
-  min-width: min(360px, 100%);
+  min-width: min(240px, 100%);
   position: relative;
-  padding: 0.85rem 1rem 0.9rem;
+  padding: 0.4rem 0.7rem 0.45rem;
   background: var(--lab-tier-bg, var(--bg-elevated));
   border: 1px solid var(--lab-tier-border, var(--border));
   border-radius: var(--radius-lg);
@@ -1056,10 +1096,10 @@ code {
    and give each variant a soft glow so the verdict reads from across
    the page. */
 .lab-tier .status-chip {
-  font-size: 0.7rem;
+  font-size: 0.56rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  padding: 0.28rem 0.65rem;
+  padding: 0.18rem 0.45rem;
   /* Default (mostly used by --ok overrides below) — bright white text on
      a softly tinted dark backdrop, with a crisp border. */
   color: rgba(255, 255, 255, 0.96);
@@ -1141,8 +1181,8 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding-bottom: 0.55rem;
-  margin-bottom: 0.55rem;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.25rem;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
 }
 .lab-tier-id {
@@ -1153,13 +1193,13 @@ code {
 }
 .lab-tier-name {
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text);
 }
 .lab-tier-count {
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1182,7 +1222,7 @@ code {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 .lab-tier-empty {
   position: relative;
@@ -1210,7 +1250,7 @@ code {
      tiers all read as uniform pyramid slices. Tall enough to fit a
      two-line wrapped suite name (e.g. "Playwright UI + a11y") plus a
      wrapped tools line plus the stats row without truncating. */
-  min-height: 92px;
+  min-height: 54px;
   background: color-mix(in srgb, var(--text) 3%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
   border-radius: 10px;
@@ -1240,8 +1280,8 @@ code {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.45rem;
-  padding: 0.55rem 1.85rem 0.55rem 0.7rem; /* room on right for ↗ pill */
+  gap: 0.25rem;
+  padding: 0.35rem 1.35rem 0.35rem 0.5rem; /* room on right for ↗ pill */
   text-decoration: none;
   color: inherit;
   min-width: 0;
@@ -1263,7 +1303,7 @@ code {
   min-width: 0;
 }
 .lab-row-name {
-  font-size: 0.92rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -1274,7 +1314,7 @@ code {
   color: var(--ember);
 }
 .lab-row-tools {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
 }
@@ -1284,19 +1324,19 @@ code {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: flex-start; /* sits below name, left-aligned with it */
-  gap: 0.35rem 0.85rem;
+  gap: 0.2rem 0.5rem;
   font-variant-numeric: tabular-nums;
 }
 .lab-row-stat {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.28rem;
-  font-size: 0.78rem;
+  gap: 0.22rem;
+  font-size: 0.66rem;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 .lab-row-stat strong {
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
@@ -1329,14 +1369,14 @@ code {
      consume horizontal space — important now that sub-rows can be as
      narrow as 200px in multi-suite tiers. */
   position: absolute;
-  top: 0.45rem;
-  right: 0.5rem;
+  top: 0.3rem;
+  right: 0.32rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  font-size: 0.72rem;
+  width: 17px;
+  height: 17px;
+  font-size: 0.58rem;
   line-height: 1;
   color: var(--text-tertiary);
   background: color-mix(in srgb, var(--text) 6%, transparent);

@@ -800,17 +800,14 @@ function renderDashboard(data, suiteResults) {
       </header>
 
       <main id="main">
-        <section class="section" id="pyramid">
+        <section class="section section--compact" id="pyramid">
           <div class="section-head">
             <p class="eyebrow"><span class="eyebrow-num">01</span> Coverage</p>
             <h2>The pyramid, live</h2>
             <p class="section-desc">
-              Five architectural tiers from pure-logic unit tests up to UI E2E.
-              Schemathesis joins API E2E in the API band; k6 load tests join
-              pytest in the Integration band. Counts come from JUnit XML or
-              the k6 summary uploaded by the latest CI run on <code>main</code>.
-              Tap a row for the full report; the GitHub icon jumps to the
-              source dir.
+              Five tiers, nine suites — every count comes from JUnit XML or
+              the k6 summary published by the latest CI run on <code>main</code>.
+              Tap a row for the report; ↗ jumps to source.
             </p>
           </div>
           ${renderPyramidDashboard(buildTiers(suiteResults))}
