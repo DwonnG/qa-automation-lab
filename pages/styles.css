@@ -827,7 +827,6 @@ code {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   backdrop-filter: blur(12px);
-  text-decoration: none;
   color: inherit;
   position: relative;
   overflow: hidden;
@@ -840,7 +839,13 @@ code {
   border-color: var(--border-hover);
   transform: translateY(-4px);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
-  color: inherit;
+}
+/* Focus ring is rendered on the card itself when its primary link
+   takes keyboard focus (the inner :focus-visible is hidden so we don't
+   double-paint). Matches the portfolio's featured-card pattern. */
+.suite-card:has(.suite-card-primary:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .suite-card--ok {
@@ -945,16 +950,28 @@ code {
   color: var(--ok);
 }
 
+/* Card footer with two CTAs: primary "Open report" extends across the
+   whole card via ::after; secondary "Source" floats above on z=1 so it
+   can intercept clicks for the GitHub directory link without breaking
+   the rest of the card's click target. */
+.suite-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  margin-top: auto;
+}
 .suite-cta {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   margin: 0;
-  margin-top: auto;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--accent);
+  text-decoration: none;
   transition: color 0.2s var(--ease-out), transform 0.2s var(--ease-out);
 }
 .suite-card:hover .suite-cta {
@@ -966,6 +983,52 @@ code {
 .suite-cta .arrow {
   display: inline-block;
   transition: transform 0.25s var(--ease-out);
+}
+.suite-card-primary {
+  /* Position static; ::after resolves against .suite-card (position:
+     relative on .suite-card). z-index: 0 keeps the extender below
+     .suite-card-source which sits at z=1. */
+  position: static;
+}
+.suite-card-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+.suite-card-primary:focus-visible {
+  outline: none;
+}
+.suite-card-source {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  transition:
+    color 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out);
+}
+.suite-card-source:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.suite-card-source .arrow-ext {
+  font-size: 0.78rem;
+  line-height: 1;
 }
 .suite-empty {
   margin: 0 0 0.85rem;

@@ -744,7 +744,7 @@ function renderSuiteCard(suite) {
   if (suite.key === "perf") return renderPerfCard(suite);
   if (!suite.available || !suite.stats) {
     return `
-      <a class="suite-card suite-card--idle" href="${suite.detailUrl}">
+      <article class="suite-card suite-card--idle">
         <div class="suite-card-head">
           <span class="layer-pill">${escapeHtml(suite.layer)}</span>
           <span class="status-chip status-chip--idle">no data yet</span>
@@ -752,15 +752,15 @@ function renderSuiteCard(suite) {
         <h3>${escapeHtml(suite.title)}</h3>
         <p class="suite-tools">${escapeHtml(suite.tools)}</p>
         <p class="suite-empty">Run the workflow on <code>main</code> to populate this card.</p>
-        <p class="suite-cta">Open details <span class="arrow">&rarr;</span></p>
-      </a>
+        ${renderSuiteFoot(suite, "Open details")}
+      </article>
     `;
   }
   const status = suiteStatus(suite.stats);
   const passed = passedCount(suite.stats);
   const failedTotal = suite.stats.failures + suite.stats.errors;
   return `
-    <a class="suite-card suite-card--${status.klass}" href="${suite.detailUrl}">
+    <article class="suite-card suite-card--${status.klass}">
       <div class="suite-card-head">
         <span class="layer-pill">${escapeHtml(suite.layer)}</span>
         <span class="status-chip status-chip--${status.klass}">${status.label}</span>
@@ -775,15 +775,15 @@ function renderSuiteCard(suite) {
         <div><span class="num">${formatDuration(suite.stats.time)}</span><span>duration</span></div>
         <div><span class="num">${suite.stats.tests > 0 ? `${Math.round((passed / Math.max(1, suite.stats.tests - suite.stats.skipped)) * 100)}%` : "—"}</span><span>pass rate</span></div>
       </div>
-      <p class="suite-cta">Open report <span class="arrow">&rarr;</span></p>
-    </a>
+      ${renderSuiteFoot(suite, "Open report")}
+    </article>
   `;
 }
 
 function renderPerfCard(suite) {
   if (!suite.available || !suite.perf) {
     return `
-      <a class="suite-card suite-card--idle" href="${suite.detailUrl}">
+      <article class="suite-card suite-card--idle">
         <div class="suite-card-head">
           <span class="layer-pill">${escapeHtml(suite.layer)}</span>
           <span class="status-chip status-chip--idle">no data yet</span>
@@ -791,15 +791,15 @@ function renderPerfCard(suite) {
         <h3>${escapeHtml(suite.title)}</h3>
         <p class="suite-tools">${escapeHtml(suite.tools)}</p>
         <p class="suite-empty">Perf workflow hasn&rsquo;t uploaded a summary yet.</p>
-        <p class="suite-cta">Open details <span class="arrow">&rarr;</span></p>
-      </a>
+        ${renderSuiteFoot(suite, "Open details")}
+      </article>
     `;
   }
   const p = suite.perf;
   const klass = p.thresholds_passed ? "ok" : "bad";
   const label = p.thresholds_passed ? "thresholds OK" : "thresholds violated";
   return `
-    <a class="suite-card suite-card--${klass}" href="${suite.detailUrl}">
+    <article class="suite-card suite-card--${klass}">
       <div class="suite-card-head">
         <span class="layer-pill">${escapeHtml(suite.layer)}</span>
         <span class="status-chip status-chip--${klass}">${label}</span>
@@ -814,8 +814,33 @@ function renderPerfCard(suite) {
         <div><span class="num">${formatMs(p.p99_ms)}</span><span>p99</span></div>
         <div><span class="num">${formatMs(p.max_ms)}</span><span>max</span></div>
       </div>
-      <p class="suite-cta">Open report <span class="arrow">&rarr;</span></p>
-    </a>
+      ${renderSuiteFoot(suite, "Open report")}
+    </article>
+  `;
+}
+
+// Footer with two CTAs: the primary report link uses ::after to extend
+// the click target across the whole card (matching the portfolio's
+// .project-card-primary pattern); the secondary source link uses
+// z-index: 1 so a click on it wins over the extender and opens the
+// directory on GitHub in a new tab. Suite name in the aria-label so
+// screen readers don't hear seven identical "Source" links in a row.
+function renderSuiteFoot(suite, primaryLabel) {
+  return `
+    <div class="suite-card-foot">
+      <a class="suite-card-primary suite-cta" href="${escapeAttr(suite.detailUrl)}">
+        ${escapeHtml(primaryLabel)} <span class="arrow">&rarr;</span>
+      </a>
+      <a
+        class="suite-card-source"
+        href="${escapeAttr(suite.sourceHref)}"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="${escapeAttr(suite.title)} source on GitHub"
+      >
+        Source <span class="arrow-ext" aria-hidden="true">&#x2197;</span>
+      </a>
+    </div>
   `;
 }
 
