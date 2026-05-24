@@ -52,10 +52,16 @@ export default {
           return withCors(json({ error: "method not allowed" }, 405), origin);
         }
         if (sub === "/agent-feedback.md") {
-          return withCors(await serveBundleFile(runId, "agent-feedback.md", env, ctx), origin);
+          return withCors(
+            await serveBundleFile(runId, "agent-feedback.md", env, ctx),
+            origin,
+          );
         }
         if (sub === "/agent-summary.json") {
-          return withCors(await serveBundleFile(runId, "agent-summary.json", env, ctx), origin);
+          return withCors(
+            await serveBundleFile(runId, "agent-summary.json", env, ctx),
+            origin,
+          );
         }
         return withCors(await handleRunStatus(runId, env, ctx, url), origin);
       }
@@ -89,7 +95,10 @@ function withCors(resp, origin) {
 function json(payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...extraHeaders,
+    },
   });
 }
 
@@ -117,7 +126,9 @@ async function checkRateLimit(request, env) {
   }
   // KV writes are eventually consistent; for a portfolio demo that's
   // acceptable — burst tolerance is fine, abuse mitigation isn't.
-  await env.DISPATCH_KV.put(key, String(current + 1), { expirationTtl: 60 * 60 });
+  await env.DISPATCH_KV.put(key, String(current + 1), {
+    expirationTtl: 60 * 60,
+  });
   return { ok: true, current: current + 1, limit };
 }
 
@@ -149,10 +160,7 @@ async function handleDispatch(request, env, ctx) {
   }
   const { valid, unknown } = sanitizeDefects(body.defects);
   if (valid.length === 0) {
-    return json(
-      { error: "no valid defects supplied", unknown },
-      400,
-    );
+    return json({ error: "no valid defects supplied", unknown }, 400);
   }
   const requestor = String(body.requestor || "dashboard").slice(0, 64);
   // Stamp before triggering so we can find OUR run with a high-confidence
@@ -178,7 +186,11 @@ async function handleDispatch(request, env, ctx) {
   if (!dispatch.ok) {
     const text = await dispatch.text();
     return json(
-      { error: "github dispatch failed", status: dispatch.status, detail: text.slice(0, 400) },
+      {
+        error: "github dispatch failed",
+        status: dispatch.status,
+        detail: text.slice(0, 400),
+      },
       502,
     );
   }
@@ -232,7 +244,10 @@ function sleep(ms) {
 // ---------- GET /run/<id> -------------------------------------------------
 
 async function handleRunStatus(runId, env, ctx, requestUrl) {
-  const res = await ghApi(env, `/repos/${env.GITHUB_REPO}/actions/runs/${runId}`);
+  const res = await ghApi(
+    env,
+    `/repos/${env.GITHUB_REPO}/actions/runs/${runId}`,
+  );
   if (!res.ok) {
     return json({ error: "github lookup failed", status: res.status }, 502);
   }

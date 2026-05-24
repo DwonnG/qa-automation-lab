@@ -43,9 +43,9 @@ def list_items(...):
 
 ## Why the others don't catch it
 
-- All functional suites assert on response *content*, not duration. They
+- All functional suites assert on response _content_, not duration. They
   pass — slowly.
-- The frontend in-browser SUT *does* feel sluggish (list takes ~500ms
+- The frontend in-browser SUT _does_ feel sluggish (list takes ~500ms
   instead of ~5ms), so this defect is loosely visible to a human visitor
   even though no functional assertion fires.
 

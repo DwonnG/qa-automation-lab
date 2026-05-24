@@ -16,13 +16,13 @@ gap with:
 
 ## Routes
 
-| Method  | Path                                | Purpose                                              |
-| ------- | ----------------------------------- | ---------------------------------------------------- |
-| POST    | `/dispatch`                         | Trigger a `workflow_dispatch` run                    |
-| GET     | `/run/<id>`                         | Poll status / conclusion / bundle URL                |
-| GET     | `/run/<id>/agent-feedback.md`       | Agent post-mortem (markdown)                         |
-| GET     | `/run/<id>/agent-summary.json`      | Machine-readable summary                             |
-| OPTIONS | `*`                                 | CORS preflight                                       |
+| Method  | Path                           | Purpose                               |
+| ------- | ------------------------------ | ------------------------------------- |
+| POST    | `/dispatch`                    | Trigger a `workflow_dispatch` run     |
+| GET     | `/run/<id>`                    | Poll status / conclusion / bundle URL |
+| GET     | `/run/<id>/agent-feedback.md`  | Agent post-mortem (markdown)          |
+| GET     | `/run/<id>/agent-summary.json` | Machine-readable summary              |
+| OPTIONS | `*`                            | CORS preflight                        |
 
 `POST /dispatch` body:
 

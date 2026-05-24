@@ -55,7 +55,7 @@ def issue_token(pin: str) -> str:
 
 - Frontend Zod still enforces 6-digit shape, so the React form blocks
   obviously broken inputs (e.g. empty, alphabetic). The defect only
-  affects PIN *value*, not shape.
+  affects PIN _value_, not shape.
 - Schemathesis is concerned with the schema contract, not credential
   correctness.
 

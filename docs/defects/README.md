@@ -13,11 +13,11 @@ Each defect lives in production code paths, gated by a flag, so:
 
 ## How a defect is wired
 
-| Layer | Mechanism |
-| --- | --- |
-| Backend (FastAPI) | `DEFECTS` env var (CSV of ids). `demo_app/defects.py` exposes `enabled(id)`. Handlers branch inside. |
-| Frontend (MSW) | `VITE_DEFECTS` build-time env, or `sessionStorage["qa-automation-lab.defects"]` at runtime. `web/src/lib/defects.ts` exposes `defectEnabled(id)`. MSW handlers branch on it so the in-browser SUT misbehaves identically. |
-| CI | `.github/workflows/dispatch-defect-run.yml` accepts a `defects` input, exports both env vars, runs the affected suites, then invokes [`scripts/agent-review.mjs`](../../scripts/agent-review.mjs) to summarize the resulting failures. |
+| Layer             | Mechanism                                                                                                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend (FastAPI) | `DEFECTS` env var (CSV of ids). `demo_app/defects.py` exposes `enabled(id)`. Handlers branch inside.                                                                                                                                   |
+| Frontend (MSW)    | `VITE_DEFECTS` build-time env, or `sessionStorage["qa-automation-lab.defects"]` at runtime. `web/src/lib/defects.ts` exposes `defectEnabled(id)`. MSW handlers branch on it so the in-browser SUT misbehaves identically.              |
+| CI                | `.github/workflows/dispatch-defect-run.yml` accepts a `defects` input, exports both env vars, runs the affected suites, then invokes [`scripts/agent-review.mjs`](../../scripts/agent-review.mjs) to summarize the resulting failures. |
 
 A defect with no flag set is a no-op — production code paths run.
 
@@ -32,13 +32,13 @@ Regenerate them whenever the defect surface changes — see
 
 ## Catalog
 
-| Id | Tier | Visible in browser? | Caught by |
-| --- | --- | --- | --- |
-| [`login_accepts_any_pin`](login_accepts_any_pin.md) | Backend unit + UI E2E | Yes | `test_auth.py`, Playwright login |
-| [`negative_qty_allowed`](negative_qty_allowed.md) | Backend integration + Contract | No (client validates) | `test_items.py`, Schemathesis |
-| [`off_by_one_pagination`](off_by_one_pagination.md) | Backend integration + UI E2E | Yes (one row missing) | `test_items.py` pagination, Playwright count |
-| [`delete_skips_auth`](delete_skips_auth.md) | API E2E | No (subtle) | `pytest-api/test_auth_required.py` |
-| [`slow_query`](slow_query.md) | Performance (k6) | Yes (slower load) | k6 p95 SLO |
+| Id                                                  | Tier                           | Visible in browser?   | Caught by                                    |
+| --------------------------------------------------- | ------------------------------ | --------------------- | -------------------------------------------- |
+| [`login_accepts_any_pin`](login_accepts_any_pin.md) | Backend unit + UI E2E          | Yes                   | `test_auth.py`, Playwright login             |
+| [`negative_qty_allowed`](negative_qty_allowed.md)   | Backend integration + Contract | No (client validates) | `test_items.py`, Schemathesis                |
+| [`off_by_one_pagination`](off_by_one_pagination.md) | Backend integration + UI E2E   | Yes (one row missing) | `test_items.py` pagination, Playwright count |
+| [`delete_skips_auth`](delete_skips_auth.md)         | API E2E                        | No (subtle)           | `pytest-api/test_auth_required.py`           |
+| [`slow_query`](slow_query.md)                       | Performance (k6)               | Yes (slower load)     | k6 p95 SLO                                   |
 
 ## Adding a new defect
 
@@ -53,7 +53,7 @@ Regenerate them whenever the defect surface changes — see
 
 ## Why this is not a kill switch
 
-Real feature flags gate *unreleased* features so they can be rolled forward
-safely. These flags do the opposite: they gate *broken* behavior that should
+Real feature flags gate _unreleased_ features so they can be rolled forward
+safely. These flags do the opposite: they gate _broken_ behavior that should
 never reach production. They exist purely as a teaching aid for this lab.
 A real deploy pipeline would refuse to ship a build where any of them was on.
