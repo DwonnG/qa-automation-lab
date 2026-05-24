@@ -639,6 +639,12 @@ code {
 }
 
 .metric {
+  /* container-type lets children scale via cqi units and lets us
+     branch on the actual tile width instead of the viewport. The
+     hero strip uses auto-fit minmax so individual tiles can be as
+     narrow as ~110px when six are packed onto one row, and labels
+     like WALL-CLOCK have to shrink rather than wrap there. */
+  container-type: inline-size;
   padding: 1.1rem 1.15rem;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -680,6 +686,34 @@ code {
   text-transform: uppercase;
   color: var(--text-tertiary);
   font-weight: 500;
+  /* Labels are single tokens (TESTS, PASS RATE, WALL-CLOCK) — never
+     wrap; if the tile is too narrow we'd rather shrink the text via
+     the container queries below than spill onto a second line. */
+  white-space: nowrap;
+}
+
+/* Tile-aware shrinking: the metrics strip auto-fits, so individual
+   tiles can land at ~110-140px. At those widths the default label
+   font + tracking overflows for any label longer than ~7 chars. We
+   step it down in two stages so the type still feels intentional
+   instead of jumping in lockstep with viewport breakpoints. */
+@container (max-width: 160px) {
+  .metric-value {
+    font-size: 1.35rem;
+  }
+  .metric-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
+  }
+}
+@container (max-width: 125px) {
+  .metric-value {
+    font-size: 1.2rem;
+  }
+  .metric-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.02em;
+  }
 }
 
 .hero-meta {
