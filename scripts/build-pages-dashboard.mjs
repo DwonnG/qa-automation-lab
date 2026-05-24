@@ -1036,7 +1036,7 @@ function renderHtmlEmbedDetail(suite) {
     ${suite.stats ? renderDetailMetrics(suite.stats, status, passed, failedTotal) : ""}
     ${
       hasHtml
-        ? `<section><h2>Native report</h2><div class="embed-wrap"><iframe src="./full/" title="Playwright HTML report" loading="lazy"></iframe></div></section>`
+        ? `<section class="section--bleed"><h2>Native report</h2><div class="embed-wrap"><iframe src="./full/" title="Playwright HTML report" loading="lazy"></iframe></div></section>`
         : ""
     }
   `;
