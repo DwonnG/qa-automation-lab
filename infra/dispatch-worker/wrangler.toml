@@ -1,0 +1,41 @@
+name = "qa-automation-lab-dispatch"
+main = "src/worker.js"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Tighten the worker's reachable origin once deployed (e.g.
+# "qa-automation-lab.dwgoodwi.workers.dev") and set CORS allow-origin
+# below to your Pages host. The route here is optional — keep it on the
+# default workers.dev subdomain unless you want a custom domain.
+
+[vars]
+# The dashboard origin allowed to call this worker. CORS preflight only
+# replies Access-Control-Allow-Origin for an exact match — set this to
+# the GitHub Pages origin (no trailing slash). Example for this repo:
+#   ALLOWED_ORIGIN = "https://dwonng.github.io"
+ALLOWED_ORIGIN = "https://dwonng.github.io"
+
+# Repo to dispatch against. Format: <owner>/<repo>.
+GITHUB_REPO = "DwonnG/qa-automation-lab"
+
+# Workflow filename in .github/workflows/ that this worker triggers.
+GITHUB_WORKFLOW = "dispatch-defect-run.yml"
+
+# Branch to dispatch against (the workflow lives on this branch).
+GITHUB_REF = "main"
+
+# Per-IP rate limit (dispatches per hour).
+RATE_LIMIT_PER_HOUR = "5"
+
+# Bind a KV namespace for rate limiting + artifact caching. Create the
+# namespace once via `wrangler kv:namespace create DISPATCH_KV` and paste
+# the returned id below before deploying.
+[[kv_namespaces]]
+binding = "DISPATCH_KV"
+id = "REPLACE_ME_WITH_WRANGLER_OUTPUT"
+
+# Required secret: a fine-scoped Personal Access Token with only
+# `actions:write` and `actions:read` on this repository. Set with:
+#   wrangler secret put GITHUB_TOKEN
+# The token is never exposed to the browser; it lives only in the worker
+# runtime environment.

@@ -2061,3 +2061,263 @@ code {
     padding: 1.25rem 1.25rem 1.1rem;
   }
 }
+
+/* Defect injection panel
+   ------------------------------------------------------------------------
+   Sits between #pyramid and #sut. Reuses the bento-card chrome (border,
+   bg-elevated, backdrop blur) so it visually belongs with the rest of the
+   dashboard rather than reading as a separate widget. The pyramid bands
+   above grow a coloured outline (.lab-tier--defect-pending / --failed)
+   while a run is in flight so the cause-and-effect is obvious without
+   needing to read the panel below. */
+
+.defect-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.2rem 1.25rem 1.1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(12px);
+}
+.defect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.defect-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.defect-row:hover {
+  border-color: var(--border-hover);
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+}
+.defect-row-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+.defect-row-toggle input[type="checkbox"] {
+  margin-top: 0.25rem;
+  flex: none;
+  cursor: pointer;
+}
+.defect-row-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+.defect-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.defect-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  align-items: center;
+}
+.defect-row-id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+.defect-row-tier {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid var(--border);
+}
+.defect-row-flag {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.defect-row-summary {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.defect-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.35rem;
+  flex: none;
+}
+.defect-row-link {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 120ms ease;
+}
+.defect-row-link:hover,
+.defect-row-link:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.defect-panel-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+.defect-run-btn {
+  flex: none;
+}
+.defect-run-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.defect-panel-status {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.defect-panel-status--info {
+  color: var(--accent);
+}
+.defect-panel-status--ok {
+  color: var(--ok);
+}
+.defect-panel-status--err {
+  color: var(--bad);
+}
+
+.defect-panel-result {
+  margin-top: 0.4rem;
+  padding: 0.95rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.defect-result-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+.defect-result-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.defect-result-head a {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+.defect-result-body {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.defect-result-body h2,
+.defect-result-body h3,
+.defect-result-body h4 {
+  font-family: var(--font-display);
+  margin: 1.1rem 0 0.4rem;
+  color: var(--text);
+}
+.defect-result-body h2 {
+  font-size: 1.15rem;
+}
+.defect-result-body h3 {
+  font-size: 1rem;
+}
+.defect-result-body h4 {
+  font-size: 0.92rem;
+}
+.defect-result-body p {
+  margin: 0 0 0.55rem;
+}
+.defect-result-body ul {
+  margin: 0 0 0.7rem;
+  padding-left: 1.2rem;
+}
+.defect-result-body li {
+  margin-bottom: 0.25rem;
+}
+.defect-result-body code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.defect-result-body pre {
+  margin: 0 0 0.7rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.defect-result-body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+/* Pyramid band highlights for the live run state.
+   --pending: amber while the workflow is running.
+   --failed: warm-red after the agent confirms a failure. */
+.lab-tier--defect-pending {
+  outline: 2px dashed var(--warn);
+  outline-offset: 2px;
+  animation: defect-pulse 1.8s ease-in-out infinite;
+}
+.lab-tier--defect-failed {
+  outline: 2px solid var(--bad);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--bad-dim);
+}
+@keyframes defect-pulse {
+  0%,
+  100% {
+    outline-color: color-mix(in srgb, var(--warn) 70%, transparent);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--warn) 30%, transparent);
+  }
+}
+

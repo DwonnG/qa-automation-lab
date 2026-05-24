@@ -1,0 +1,22 @@
+{
+  "defects": ["slow_query"],
+  "totals": { "failed": 1, "passed": 0, "skipped": 0, "suiteCount": 1 },
+  "failures": [
+    {
+      "suite": "perf",
+      "classname": "k6",
+      "name": "items_smoke (p95/p99 SLO)",
+      "message": "k6 thresholds failed: p95=437ms p99=512ms (limits 200/400)"
+    }
+  ],
+  "perf_thresholds_passed": false,
+  "perf_summary": {
+    "p95_ms": 437,
+    "p99_ms": 512,
+    "thresholds_passed": false,
+    "iterations": 240,
+    "duration_s": 30
+  },
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}

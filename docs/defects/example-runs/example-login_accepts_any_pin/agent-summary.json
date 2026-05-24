@@ -1,0 +1,22 @@
+{
+  "defects": ["login_accepts_any_pin"],
+  "totals": { "failed": 2, "passed": 12, "skipped": 0, "suiteCount": 2 },
+  "failures": [
+    {
+      "suite": "backend",
+      "classname": "tests.unit.test_auth.TestIssueToken",
+      "name": "test_issue_token_rejects_wrong_pin",
+      "message": "AssertionError: DID NOT RAISE <class 'demo_app.auth.InvalidPinError'>"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.login",
+      "name": "rejects a wrong PIN with a generic error",
+      "message": "expect(locator).toBeVisible() failed for getByText(/invalid credentials/i)"
+    }
+  ],
+  "perf_thresholds_passed": null,
+  "perf_summary": null,
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}

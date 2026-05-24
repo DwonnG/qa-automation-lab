@@ -1,0 +1,22 @@
+{
+  "defects": ["negative_qty_allowed"],
+  "totals": { "failed": 2, "passed": 18, "skipped": 0, "suiteCount": 2 },
+  "failures": [
+    {
+      "suite": "backend",
+      "classname": "tests.integration.test_items.TestCreateItem",
+      "name": "test_create_invalid_body_returns_422[negative_quantity]",
+      "message": "assert response.status_code == 422 — got 201"
+    },
+    {
+      "suite": "schemathesis",
+      "classname": "tests.test_openapi_contract",
+      "name": "test_api[POST /api/items]",
+      "message": "Negative quantity accepted with 201; schema requires minimum: 0"
+    }
+  ],
+  "perf_thresholds_passed": null,
+  "perf_summary": null,
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}

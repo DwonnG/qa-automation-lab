@@ -42,8 +42,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACTS = resolve(args["artifacts-dir"] ?? join(ROOT, "_artifacts"));
 const WEB_DIST = resolve(args["web-dist"] ?? join(ROOT, "web/dist"));
 const PAGES_DIR = resolve(args["pages-dir"] ?? join(ROOT, "pages"));
+const DEFECTS_DIR = resolve(args["defects-dir"] ?? join(ROOT, "docs/defects"));
+const DEFECT_RUNS_DIR = resolve(
+  args["defect-runs-dir"] ?? join(ROOT, "docs/defects/example-runs"),
+);
 const OUT = resolve(args.out ?? join(ROOT, "_site"));
 const PAGES_BASE = (env.PAGES_BASE ?? "/qa-automation-lab").replace(/\/$/, "");
+
+// Optional: URL to the Cloudflare Worker (or any HTTPS endpoint) that
+// proxies workflow_dispatch + run-status. When set at build time the
+// defect-injection panel becomes a live "Run with defects" trigger;
+// when absent the panel is read-only and the dispatch button is
+// disabled with a "configure DEFECT_DISPATCH_URL" hint.
+const DEFECT_DISPATCH_URL = (env.DEFECT_DISPATCH_URL ?? "").trim();
 
 const REPO_URL = "https://github.com/DwonnG/qa-automation-lab";
 
@@ -181,9 +192,37 @@ async function main() {
     JSON.stringify(dashboard, null, 2) + "\n",
   );
 
+  const defectsCatalog = loadDefectsCatalog();
+  writeFileSync(
+    join(OUT, "data", "defects.json"),
+    JSON.stringify(
+      { generated_at: dashboard.generated_at, defects: defectsCatalog },
+      null,
+      2,
+    ) + "\n",
+  );
+
+  // Pre-seed /defect-runs/example-<id>/ from docs/defects/example-runs/
+  // so the panel has live-looking output to show before anyone clicks
+  // the dispatch button.
+  if (existsSync(DEFECT_RUNS_DIR)) {
+    ensureDir(join(OUT, "defect-runs"));
+    for (const entry of readdirSync(DEFECT_RUNS_DIR)) {
+      const src = join(DEFECT_RUNS_DIR, entry);
+      const dest = join(OUT, "defect-runs", entry);
+      try {
+        cpRecursiveSync(src, dest);
+      } catch (err) {
+        console.warn(
+          `[build-pages] copy example run ${entry} failed: ${err.message}`,
+        );
+      }
+    }
+  }
+
   writeFileSync(
     join(OUT, "index.html"),
-    renderDashboard(dashboard, suiteResults),
+    renderDashboard(dashboard, suiteResults, defectsCatalog),
   );
   console.log(`[build-pages] wrote dashboard to ${OUT}`);
 }
@@ -767,12 +806,16 @@ function parseArgs(argList) {
 // HTML rendering
 // ---------------------------------------------------------------------------
 
-function renderDashboard(data, suiteResults) {
+function renderDashboard(data, suiteResults, defectsCatalog = []) {
   const { totals, ci } = data;
   const updated = new Date(data.generated_at);
   const overall = overallStatus(totals);
   return baseLayout({
     title: "qa-automation-lab dashboard",
+    extraMeta: `
+      <meta name="defect-dispatch-url" content="${escapeAttr(DEFECT_DISPATCH_URL)}" />
+      <meta name="defect-runs-base" content="${escapeAttr(`${PAGES_BASE}/defect-runs/`)}" />
+    `,
     body: `
       <header class="hero">
         <div class="hero-inner">
@@ -815,9 +858,11 @@ function renderDashboard(data, suiteResults) {
           ${renderPyramidDashboard(buildTiers(suiteResults))}
         </section>
 
+        ${renderDefectsSection(defectsCatalog)}
+
         <section class="section" id="sut">
           <div class="section-head">
-            <p class="eyebrow"><span class="eyebrow-num">02</span> System under test</p>
+            <p class="eyebrow"><span class="eyebrow-num">03</span> System under test</p>
             <h2>The app the suites target</h2>
             <p class="section-desc">
               Every count above came from running tests against this exact
@@ -1113,6 +1158,203 @@ function renderPerfStats(perf) {
 // classes (.lab-crosscut*, .lab-cross-card*) remain in styles.css only
 // because the detail pages still reference some of the .lab-cross-* atoms;
 // nothing on the dashboard renders them any more.)
+
+// ---------------------------------------------------------------------------
+// Defect injection panel
+//
+// loadDefectsCatalog() parses docs/defects/*.md frontmatter (a tiny YAML
+// subset: key/value scalars + the `caught_by` list). renderDefectsSection()
+// emits the chooser UI. The actual dispatch + polling logic lives in
+// pages/dispatch.js and reads metadata from <meta> tags injected here.
+// ---------------------------------------------------------------------------
+
+function loadDefectsCatalog() {
+  if (!existsSync(DEFECTS_DIR)) return [];
+  const out = [];
+  for (const name of readdirSync(DEFECTS_DIR)) {
+    if (!name.endsWith(".md") || name === "README.md") continue;
+    const full = join(DEFECTS_DIR, name);
+    try {
+      const raw = readFileSync(full, "utf8");
+      const meta = parseFrontmatter(raw);
+      if (!meta?.id) continue;
+      out.push(meta);
+    } catch (err) {
+      console.warn(`[build-pages] skip defect ${name}: ${err.message}`);
+    }
+  }
+  // Stable order: same as KNOWN_DEFECTS in web/src/lib/defects.ts so the
+  // panel and the in-browser SUT toggle list match top-to-bottom.
+  const order = [
+    "login_accepts_any_pin",
+    "negative_qty_allowed",
+    "off_by_one_pagination",
+    "delete_skips_auth",
+    "slow_query",
+  ];
+  out.sort((a, b) => {
+    const ai = order.indexOf(a.id);
+    const bi = order.indexOf(b.id);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  return out;
+}
+
+// Tiny YAML-subset parser: enough for the frontmatter shape used by the
+// defect catalog (scalar key: value, multiline `|` blocks, list of
+// objects under `caught_by:`). Refuses anything more exotic.
+function parseFrontmatter(text) {
+  const m = text.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!m) return null;
+  const lines = m[1].split("\n");
+  const out = {};
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim() || line.trim().startsWith("#")) {
+      i += 1;
+      continue;
+    }
+    const kv = line.match(/^([a-z_][a-z0-9_]*)\s*:\s*(.*)$/i);
+    if (!kv) {
+      i += 1;
+      continue;
+    }
+    const key = kv[1];
+    let value = kv[2].trim();
+    if (value === "|") {
+      // Block scalar: consume indented lines.
+      const block = [];
+      i += 1;
+      while (i < lines.length && /^\s{2,}/.test(lines[i])) {
+        block.push(lines[i].replace(/^\s{2}/, ""));
+        i += 1;
+      }
+      out[key] = block.join("\n").trim();
+      continue;
+    }
+    if (value === "") {
+      // Could be a list: peek next line for `  - `.
+      if (i + 1 < lines.length && /^\s*-\s/.test(lines[i + 1])) {
+        const items = [];
+        i += 1;
+        while (i < lines.length && /^\s*-\s/.test(lines[i])) {
+          // List item; collect nested key: value pairs until next `-` or
+          // end of indented block.
+          const item = {};
+          const first = lines[i].replace(/^\s*-\s*/, "");
+          if (first.includes(":")) {
+            const fk = first.match(/^([a-z_][a-z0-9_]*)\s*:\s*(.*)$/i);
+            if (fk) item[fk[1]] = fk[2].trim();
+          }
+          i += 1;
+          while (
+            i < lines.length &&
+            /^\s{4,}/.test(lines[i]) &&
+            !/^\s*-/.test(lines[i])
+          ) {
+            const nk = lines[i].match(/^\s+([a-z_][a-z0-9_]*)\s*:\s*(.*)$/i);
+            if (nk) item[nk[1]] = nk[2].trim();
+            i += 1;
+          }
+          items.push(item);
+        }
+        out[key] = items;
+        continue;
+      }
+    }
+    // Strip surrounding quotes; coerce true/false.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (value === "true") value = true;
+    else if (value === "false") value = false;
+    out[key] = value;
+    i += 1;
+  }
+  return out;
+}
+
+const TIER_LABELS = {
+  ui: "UI E2E",
+  api: "API",
+  component: "Component",
+  integration: "Integration",
+  unit: "Unit",
+};
+
+function renderDefectsSection(catalog) {
+  if (catalog.length === 0) return "";
+  const live = Boolean(DEFECT_DISPATCH_URL);
+  const helpText = live
+    ? "Pick one or more defects and dispatch a real CI run. The matching tier band(s) will flip when the run completes; an AI-written explanation appears below."
+    : "This deploy is read-only: <code>DEFECT_DISPATCH_URL</code> isn't configured, so the panel can't fire a workflow. Pre-seeded example runs are available below.";
+  const rows = catalog
+    .map((d) => {
+      const tier = TIER_LABELS[d.tier] || escapeHtml(d.tier || "");
+      const summary = escapeHtml(
+        (d.summary || "").split("\n").slice(0, 2).join(" ").slice(0, 240),
+      );
+      return `
+        <li class="defect-row" data-defect-id="${escapeAttr(d.id)}" data-tier="${escapeAttr(d.tier || "")}">
+          <label class="defect-row-toggle">
+            <input
+              type="checkbox"
+              name="defect"
+              value="${escapeAttr(d.id)}"
+              data-testid="defect-check-${escapeAttr(d.id)}"
+              ${live ? "" : "disabled"}
+            />
+            <div class="defect-row-body">
+              <div class="defect-row-head">
+                <code class="defect-row-id">${escapeHtml(d.id)}</code>
+                <span class="defect-row-tier">${escapeHtml(tier)} tier</span>
+                ${
+                  d.visible_in_browser
+                    ? `<span class="defect-row-flag" title="Toggle the in-browser SUT to see this defect immediately">in-browser</span>`
+                    : ""
+                }
+              </div>
+              <p class="defect-row-summary">${summary}</p>
+            </div>
+          </label>
+          <div class="defect-row-actions">
+            <a class="defect-row-link" href="${REPO_URL}/blob/main/docs/defects/${escapeAttr(d.id)}.md" target="_blank" rel="noopener noreferrer" title="Read the full defect spec">spec ↗</a>
+            <a class="defect-row-link" href="${PAGES_BASE}/defect-runs/example-${escapeAttr(d.id)}/" data-defect-example="${escapeAttr(d.id)}">example run</a>
+          </div>
+        </li>
+      `;
+    })
+    .join("\n");
+
+  return `
+    <section class="section section--compact" id="defects">
+      <div class="section-head">
+        <p class="eyebrow"><span class="eyebrow-num">02</span> Defect injection</p>
+        <h2>Flip a bug, watch the pyramid catch it</h2>
+        <p class="section-desc">${helpText}</p>
+      </div>
+      <div class="defect-panel" data-live="${live ? "true" : "false"}">
+        <ol class="defect-list">${rows}</ol>
+        <div class="defect-panel-footer">
+          <button
+            type="button"
+            class="btn btn--primary defect-run-btn"
+            data-testid="defect-run-btn"
+            ${live ? "" : "disabled"}
+          >
+            ${live ? "Run with selected defects" : "Configure DEFECT_DISPATCH_URL to enable"}
+          </button>
+          <p class="defect-panel-status" data-defect-status role="status" aria-live="polite"></p>
+        </div>
+        <div class="defect-panel-result" hidden data-defect-result></div>
+      </div>
+    </section>
+  `;
+}
 
 function humanAgo(date) {
   if (!date || isNaN(date.getTime())) return "just now";
@@ -1472,7 +1714,7 @@ function renderMissingDemo() {
 
 // --- Shared helpers --------------------------------------------------------
 
-function baseLayout({ title, body }) {
+function baseLayout({ title, body, extraMeta = "" }) {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -1480,6 +1722,7 @@ function baseLayout({ title, body }) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="Live dashboard for the qa-automation-lab portfolio — a multi-framework test pyramid covering React + FastAPI." />
+    ${extraMeta}
     <title>${escapeHtml(title)}</title>
     <link rel="icon" type="image/svg+xml" href="${PAGES_BASE}/favicon.svg" />
     <meta name="theme-color" content="#0a0a0d" media="(prefers-color-scheme: dark)" />
@@ -1521,6 +1764,7 @@ function baseLayout({ title, body }) {
       <div class="nav-links">
         <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
         <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
+        <a href="${PAGES_BASE}/#defects">Defects</a>
         <a href="${PAGES_BASE}/#sut">SUT</a>
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
@@ -1540,6 +1784,7 @@ function baseLayout({ title, body }) {
     <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
       <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
       <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
+      <a href="${PAGES_BASE}/#defects">Defects</a>
       <a href="${PAGES_BASE}/#sut">SUT</a>
       <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
     </div>
@@ -1557,6 +1802,7 @@ function baseLayout({ title, body }) {
     </button>
 
     <script src="${PAGES_BASE}/app.js" defer></script>
+    <script src="${PAGES_BASE}/dispatch.js" defer></script>
   </body>
 </html>
 `;

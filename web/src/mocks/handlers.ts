@@ -1,5 +1,6 @@
 import { HttpResponse, delay, http } from "msw";
 
+import { defectEnabled } from "@/lib/defects";
 import { HEALTH_URL, ITEMS_URL, LOGIN_URL, itemUrl } from "@/lib/paths";
 
 // Pre-seeded inventory so demo visitors see content immediately rather than an
@@ -77,7 +78,14 @@ export const handlers = [
       pin?: unknown;
     } | null;
     const pin = body?.pin;
-    if (typeof pin !== "string" || !PIN_PATTERN.test(pin) || pin !== DEMO_PIN) {
+    // login_accepts_any_pin defect: accept any well-formed 6-digit PIN
+    // instead of checking it equals DEMO_PIN. See
+    // docs/defects/login_accepts_any_pin.md.
+    const shapeOk = typeof pin === "string" && PIN_PATTERN.test(pin);
+    const valueOk = defectEnabled("login_accepts_any_pin")
+      ? shapeOk
+      : shapeOk && pin === DEMO_PIN;
+    if (!valueOk) {
       return HttpResponse.json(
         { detail: "invalid credentials" },
         { status: 401 },
@@ -87,10 +95,22 @@ export const handlers = [
     return HttpResponse.json({ token });
   }),
 
-  http.get(ITEMS_URL, ({ request }) => {
+  http.get(ITEMS_URL, async ({ request }) => {
     const unauthorized = requireBearer(request);
     if (unauthorized) return unauthorized;
-    return HttpResponse.json(Array.from(store.values()));
+    if (defectEnabled("slow_query")) {
+      // Mirror the backend's 400ms sleep on /api/items so a visitor with
+      // the toggle on actually feels the latency in the browser SUT, not
+      // just in k6 SLO output. See docs/defects/slow_query.md.
+      await delay(400);
+    }
+    const items = Array.from(store.values());
+    if (defectEnabled("off_by_one_pagination") && items.length > 0) {
+      // Drop the last row of the page. See
+      // docs/defects/off_by_one_pagination.md.
+      return HttpResponse.json(items.slice(0, -1));
+    }
+    return HttpResponse.json(items);
   }),
 
   http.post(ITEMS_URL, async ({ request }) => {
@@ -103,7 +123,18 @@ export const handlers = [
     if (!body || !isCleanName(body.name)) {
       return HttpResponse.json({ detail: "name is required" }, { status: 422 });
     }
-    const quantity = clampQuantity(body.quantity);
+    // negative_qty_allowed defect: skip the clampQuantity gate so any
+    // integer-like value lands in the store. The client Zod schema in
+    // ItemDialog still blocks negatives in the UI, so this defect only
+    // surfaces via direct API calls (Schemathesis, backend integration).
+    // See docs/defects/negative_qty_allowed.md.
+    let quantity: number | null;
+    if (defectEnabled("negative_qty_allowed")) {
+      const n = typeof body.quantity === "number" ? body.quantity : Number(body.quantity);
+      quantity = Number.isFinite(n) && Number.isInteger(n) ? n : null;
+    } else {
+      quantity = clampQuantity(body.quantity);
+    }
     if (quantity === null) {
       return HttpResponse.json(
         { detail: "quantity must be an integer between 0 and 10000" },
@@ -166,8 +197,14 @@ export const handlers = [
   }),
 
   http.delete(itemUrl(":id"), ({ params, request }) => {
-    const unauthorized = requireBearer(request);
-    if (unauthorized) return unauthorized;
+    // delete_skips_auth defect: skip the bearer check on DELETE only.
+    // Mirrors a real-world failure where one HTTP method's auth
+    // dependency was silently weakened. The other CRUD methods stay
+    // protected. See docs/defects/delete_skips_auth.md.
+    if (!defectEnabled("delete_skips_auth")) {
+      const unauthorized = requireBearer(request);
+      if (unauthorized) return unauthorized;
+    }
     const id = params.id as string;
     if (!store.has(id)) {
       return HttpResponse.json({ detail: "item not found" }, { status: 404 });

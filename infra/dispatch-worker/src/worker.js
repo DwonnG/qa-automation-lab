@@ -1,0 +1,327 @@
+// qa-automation-lab dispatch worker
+//
+// Routes:
+//   POST /dispatch                       Trigger workflow_dispatch
+//   GET  /run/<id>                       Workflow run status + bundle URL
+//   GET  /run/<id>/agent-feedback.md     Extracted agent feedback (text)
+//   GET  /run/<id>/agent-summary.json    Extracted machine-readable summary
+//   OPTIONS *                            CORS preflight
+//
+// Auth is held server-side: env.GITHUB_TOKEN is a fine-scoped PAT with
+// only actions:read + actions:write on this repo. The browser never sees
+// it. Rate limiting (per-IP) lives in env.DISPATCH_KV.
+//
+// Artifact extraction: when a run completes, the worker downloads the
+// `defect-run-bundle` artifact zip via the GitHub Actions API, unzips it
+// in memory with `fflate`, and stashes the two interesting files in KV
+// for ~1h so subsequent polls and direct fetches are fast.
+
+import { unzipSync, strFromU8 } from "fflate";
+
+const KNOWN_DEFECTS = new Set([
+  "login_accepts_any_pin",
+  "negative_qty_allowed",
+  "off_by_one_pagination",
+  "delete_skips_auth",
+  "slow_query",
+]);
+
+const TARGET_BUNDLE_ARTIFACT = "defect-run-bundle";
+const BUNDLE_KV_TTL_SECONDS = 60 * 60; // 1 hour
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const origin = env.ALLOWED_ORIGIN || "*";
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+
+    try {
+      if (url.pathname === "/dispatch" && request.method === "POST") {
+        return withCors(await handleDispatch(request, env, ctx), origin);
+      }
+      const runMatch = url.pathname.match(
+        /^\/run\/(\d+)(\/agent-feedback\.md|\/agent-summary\.json)?$/,
+      );
+      if (runMatch) {
+        const runId = runMatch[1];
+        const sub = runMatch[2];
+        if (request.method !== "GET") {
+          return withCors(json({ error: "method not allowed" }, 405), origin);
+        }
+        if (sub === "/agent-feedback.md") {
+          return withCors(await serveBundleFile(runId, "agent-feedback.md", env, ctx), origin);
+        }
+        if (sub === "/agent-summary.json") {
+          return withCors(await serveBundleFile(runId, "agent-summary.json", env, ctx), origin);
+        }
+        return withCors(await handleRunStatus(runId, env, ctx, url), origin);
+      }
+      return withCors(json({ error: "not found" }, 404), origin);
+    } catch (err) {
+      return withCors(
+        json({ error: err.message || "internal error" }, 500),
+        origin,
+      );
+    }
+  },
+};
+
+// ---------- helpers --------------------------------------------------------
+
+function corsHeaders(origin) {
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "access-control-max-age": "600",
+  };
+}
+
+function withCors(resp, origin) {
+  const headers = new Headers(resp.headers);
+  for (const [k, v] of Object.entries(corsHeaders(origin))) headers.set(k, v);
+  return new Response(resp.body, { status: resp.status, headers });
+}
+
+function json(payload, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
+  });
+}
+
+function ghApi(env, path, init = {}) {
+  return fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "qa-automation-lab-dispatch-worker",
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function checkRateLimit(request, env) {
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const key = `rate:${ip}:${new Date().toISOString().slice(0, 13)}`; // hour bucket
+  const limit = Number.parseInt(env.RATE_LIMIT_PER_HOUR || "5", 10);
+  const raw = await env.DISPATCH_KV.get(key);
+  const current = raw ? Number.parseInt(raw, 10) || 0 : 0;
+  if (current >= limit) {
+    return { ok: false, current, limit };
+  }
+  // KV writes are eventually consistent; for a portfolio demo that's
+  // acceptable — burst tolerance is fine, abuse mitigation isn't.
+  await env.DISPATCH_KV.put(key, String(current + 1), { expirationTtl: 60 * 60 });
+  return { ok: true, current: current + 1, limit };
+}
+
+function sanitizeDefects(input) {
+  const raw = String(input ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const valid = raw.filter((id) => KNOWN_DEFECTS.has(id));
+  const unknown = raw.filter((id) => !KNOWN_DEFECTS.has(id));
+  return { valid, unknown };
+}
+
+// ---------- POST /dispatch ------------------------------------------------
+
+async function handleDispatch(request, env, ctx) {
+  const rate = await checkRateLimit(request, env);
+  if (!rate.ok) {
+    return json(
+      { error: "rate limited", limit: rate.limit, retry_after_minutes: 60 },
+      429,
+    );
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "invalid json body" }, 400);
+  }
+  const { valid, unknown } = sanitizeDefects(body.defects);
+  if (valid.length === 0) {
+    return json(
+      { error: "no valid defects supplied", unknown },
+      400,
+    );
+  }
+  const requestor = String(body.requestor || "dashboard").slice(0, 64);
+  // Stamp before triggering so we can find OUR run with a high-confidence
+  // filter (recent runs by this workflow with this defect set).
+  const dispatchedAt = Date.now();
+
+  const dispatch = await ghApi(
+    env,
+    `/repos/${env.GITHUB_REPO}/actions/workflows/${encodeURIComponent(env.GITHUB_WORKFLOW)}/dispatches`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ref: env.GITHUB_REF,
+        inputs: {
+          defects: valid.join(","),
+          requestor,
+        },
+      }),
+    },
+  );
+
+  if (!dispatch.ok) {
+    const text = await dispatch.text();
+    return json(
+      { error: "github dispatch failed", status: dispatch.status, detail: text.slice(0, 400) },
+      502,
+    );
+  }
+
+  // workflow_dispatch returns 204 with no body and no run id. We poll
+  // the runs list for ~10s looking for the run we just created. Match on
+  // the workflow's `event = workflow_dispatch` + the requestor's input
+  // string in the display title (it isn't, so we fall back to "most
+  // recent matching dispatched_at"). Limit retries so we don't burn
+  // worker CPU minutes if GitHub takes longer.
+  let runId = null;
+  for (let attempt = 0; attempt < 5 && !runId; attempt += 1) {
+    await sleep(1500);
+    const runs = await ghApi(
+      env,
+      `/repos/${env.GITHUB_REPO}/actions/workflows/${encodeURIComponent(env.GITHUB_WORKFLOW)}/runs?event=workflow_dispatch&per_page=10`,
+    );
+    if (runs.ok) {
+      const data = await runs.json();
+      const candidate = (data.workflow_runs || [])
+        .filter((r) => new Date(r.created_at).getTime() >= dispatchedAt - 5000)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      if (candidate) runId = candidate.id;
+    }
+  }
+
+  if (!runId) {
+    return json(
+      {
+        status: "dispatched",
+        warning:
+          "workflow was dispatched but the run id could not be resolved within 7s; check Actions tab",
+        rate: rate.current,
+      },
+      202,
+    );
+  }
+  return json({
+    status: "queued",
+    run_id: runId,
+    run_url: `https://github.com/${env.GITHUB_REPO}/actions/runs/${runId}`,
+    rate: rate.current,
+    rate_limit: rate.limit,
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------- GET /run/<id> -------------------------------------------------
+
+async function handleRunStatus(runId, env, ctx, requestUrl) {
+  const res = await ghApi(env, `/repos/${env.GITHUB_REPO}/actions/runs/${runId}`);
+  if (!res.ok) {
+    return json({ error: "github lookup failed", status: res.status }, 502);
+  }
+  const run = await res.json();
+  const payload = {
+    run_id: runId,
+    status: run.status,
+    conclusion: run.conclusion,
+    run_url: run.html_url,
+    started_at: run.run_started_at,
+    updated_at: run.updated_at,
+  };
+  if (run.status === "completed") {
+    // Prime the bundle cache asynchronously so the dashboard's follow-up
+    // fetch is fast. ctx.waitUntil keeps the worker alive past the
+    // response without blocking it.
+    ctx.waitUntil(primeBundleCache(runId, env));
+    // bundle_url MUST be an absolute URL pointing at this worker; the
+    // browser concatenates it with "agent-feedback.md" and posts the
+    // request to that origin (the dashboard runs on Pages, not here).
+    payload.bundle_url = `${requestUrl.origin}/run/${runId}/`;
+  }
+  return json(payload);
+}
+
+// ---------- artifact extraction + GET /run/<id>/<file> --------------------
+
+async function serveBundleFile(runId, filename, env, ctx) {
+  const kvKey = `bundle:${runId}:${filename}`;
+  let body = await env.DISPATCH_KV.get(kvKey);
+  if (body === null) {
+    await primeBundleCache(runId, env);
+    body = await env.DISPATCH_KV.get(kvKey);
+  }
+  if (body === null) {
+    return json({ error: "bundle file not available yet" }, 404);
+  }
+  const contentType = filename.endsWith(".json")
+    ? "application/json; charset=utf-8"
+    : "text/markdown; charset=utf-8";
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
+async function primeBundleCache(runId, env) {
+  // List artifacts on the run and find the bundle.
+  const listRes = await ghApi(
+    env,
+    `/repos/${env.GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=50`,
+  );
+  if (!listRes.ok) return;
+  const list = await listRes.json();
+  const bundle = (list.artifacts || []).find(
+    (a) => a.name === TARGET_BUNDLE_ARTIFACT,
+  );
+  if (!bundle) return;
+  if (bundle.expired) return;
+
+  const dlRes = await ghApi(
+    env,
+    `/repos/${env.GITHUB_REPO}/actions/artifacts/${bundle.id}/zip`,
+    { redirect: "follow" },
+  );
+  if (!dlRes.ok) return;
+  const zipBytes = new Uint8Array(await dlRes.arrayBuffer());
+
+  let entries;
+  try {
+    entries = unzipSync(zipBytes, {
+      filter: (file) =>
+        file.name === "agent-feedback.md" ||
+        file.name === "agent-summary.json" ||
+        file.name.endsWith("/agent-feedback.md") ||
+        file.name.endsWith("/agent-summary.json"),
+    });
+  } catch {
+    return;
+  }
+
+  for (const path of Object.keys(entries)) {
+    const base = path.split("/").pop();
+    const text = strFromU8(entries[path]);
+    await env.DISPATCH_KV.put(`bundle:${runId}:${base}`, text, {
+      expirationTtl: BUNDLE_KV_TTL_SECONDS,
+    });
+  }
+}

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import hmac
+import re
 import secrets
 from threading import Lock
 
+from demo_app import defects
+
 DEMO_PIN = "000000"
 _TOKEN_BYTES = 32
+_PIN_SHAPE = re.compile(r"^[0-9]{6}$")
 
 _issued_tokens: set[str] = set()
 _lock = Lock()
@@ -20,7 +24,12 @@ class InvalidTokenError(ValueError):
 
 
 def issue_token(pin: str) -> str:
-    if not isinstance(pin, str) or not hmac.compare_digest(pin, DEMO_PIN):
+    if defects.enabled("login_accepts_any_pin"):
+        # Skip the constant-time compare; accept any well-formed 6-digit PIN.
+        # See docs/defects/login_accepts_any_pin.md.
+        if not isinstance(pin, str) or not _PIN_SHAPE.fullmatch(pin):
+            raise InvalidPinError("invalid pin")
+    elif not isinstance(pin, str) or not hmac.compare_digest(pin, DEMO_PIN):
         raise InvalidPinError("invalid pin")
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     with _lock:

@@ -1,0 +1,372 @@
+name: Defect dispatch run
+
+# Triggered from the dashboard's defect-injection panel (via a Cloudflare
+# Worker proxy that holds a fine-scoped PAT) or by hand:
+#
+#   gh workflow run dispatch-defect-run.yml \
+#     -f defects=login_accepts_any_pin,off_by_one_pagination \
+#     -f requestor=dashboard
+#
+# Picks the smallest set of suites that catches the chosen defects, runs
+# them with DEFECTS=... in the backend env (and VITE_DEFECTS=... in the
+# web build), then asks GitHub Models to write a markdown post-mortem.
+# Every job uploads JUnit/HTML/k6 artifacts; a final agent-review job
+# bundles them with agent-feedback.md into `defect-run-bundle` so the
+# dashboard can fetch one tarball.
+
+on:
+  workflow_dispatch:
+    inputs:
+      defects:
+        description: "Comma-separated defect ids (see docs/defects/)"
+        required: true
+        type: string
+      requestor:
+        description: "Free-text label so dashboard runs are distinguishable"
+        required: false
+        default: "manual"
+        type: string
+
+permissions:
+  # Cross-workflow artifact reads are unnecessary; this workflow only
+  # produces artifacts. `models: read` is required by the agent-review
+  # job's GitHub Models call.
+  contents: read
+  models: read
+
+concurrency:
+  group: defect-run-${{ inputs.requestor }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.0.0"
+  UV_VERSION: "0.5.10"
+  DEFECTS: ${{ inputs.defects }}
+  VITE_DEFECTS: ${{ inputs.defects }}
+
+jobs:
+  plan:
+    name: Plan suites
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.derive.outputs.suites }}
+      run_backend: ${{ steps.derive.outputs.run_backend }}
+      run_pytest_api: ${{ steps.derive.outputs.run_pytest_api }}
+      run_schemathesis: ${{ steps.derive.outputs.run_schemathesis }}
+      run_playwright: ${{ steps.derive.outputs.run_playwright }}
+      run_perf: ${{ steps.derive.outputs.run_perf }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: derive
+        name: Map defects to suites
+        env:
+          DEFECTS_INPUT: ${{ inputs.defects }}
+        # Defect -> suite mapping mirrors the catalog in docs/defects/.
+        # Single source of truth lives in this bash assoc array so the
+        # dashboard, the agent script, and CI can stay in sync without
+        # importing a shared module across runtimes.
+        run: |
+          set -euo pipefail
+          declare -A defect_to_suites=(
+            [login_accepts_any_pin]="backend playwright"
+            [negative_qty_allowed]="backend schemathesis"
+            [off_by_one_pagination]="backend playwright"
+            [delete_skips_auth]="backend pytest-api"
+            [slow_query]="perf"
+          )
+          declare -A want
+          IFS=',' read -ra ids <<< "$DEFECTS_INPUT"
+          for raw in "${ids[@]}"; do
+            id="$(echo "$raw" | xargs)"
+            [ -z "$id" ] && continue
+            if [ -z "${defect_to_suites[$id]+set}" ]; then
+              echo "::error::Unknown defect id: $id"
+              exit 1
+            fi
+            for s in ${defect_to_suites[$id]}; do
+              want[$s]=1
+            done
+          done
+          suites="$(printf '%s\n' "${!want[@]}" | sort | paste -sd, -)"
+          echo "Selected suites: $suites"
+          {
+            echo "suites=$suites"
+            echo "run_backend=$([ -n "${want[backend]:-}" ] && echo true || echo false)"
+            echo "run_pytest_api=$([ -n "${want[pytest-api]:-}" ] && echo true || echo false)"
+            echo "run_schemathesis=$([ -n "${want[schemathesis]:-}" ] && echo true || echo false)"
+            echo "run_playwright=$([ -n "${want[playwright]:-}" ] && echo true || echo false)"
+            echo "run_perf=$([ -n "${want[perf]:-}" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+
+  backend:
+    name: backend (defects on)
+    needs: plan
+    if: needs.plan.outputs.run_backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Run pytest with DEFECTS set
+        working-directory: demo-app
+        # `--continue-on-collection-errors` keeps the run going even if a
+        # collection fails; `|| true` ensures the artifact upload runs.
+        # The agent-review job is the one that flips the workflow red.
+        run: |
+          uv run pytest --junitxml=report.xml || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-backend
+          path: |
+            demo-app/report.xml
+
+  pytest-api:
+    name: pytest-api (defects on)
+    needs: plan
+    if: needs.plan.outputs.run_pytest_api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Start backend with DEFECTS=$DEFECTS
+        working-directory: demo-app
+        env:
+          APP_ENV: test
+        run: |
+          uv run uvicorn demo_app.main:app --port 5050 &
+          echo $! > server.pid
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Sync test deps
+        working-directory: pytest-api
+        run: uv sync
+      - name: Run pytest-api
+        working-directory: pytest-api
+        run: uv run pytest --junitxml=report.xml || true
+      - name: Stop backend
+        if: always()
+        working-directory: demo-app
+        run: |
+          if [ -f server.pid ]; then kill "$(cat server.pid)" || true; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-pytest-api
+          path: pytest-api/report.xml
+
+  schemathesis:
+    name: schemathesis (defects on)
+    needs: plan
+    if: needs.plan.outputs.run_schemathesis == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Start backend with DEFECTS=$DEFECTS
+        working-directory: demo-app
+        env:
+          APP_ENV: test
+        run: |
+          uv run uvicorn demo_app.main:app --port 5050 &
+          echo $! > server.pid
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Sync schemathesis deps
+        working-directory: schemathesis
+        run: uv sync
+      - name: Run Schemathesis
+        working-directory: schemathesis
+        env:
+          BASE_URL: http://localhost:5050
+          DEMO_PIN: "000000"
+        run: uv run pytest --junitxml=report.xml || true
+      - name: Stop backend
+        if: always()
+        working-directory: demo-app
+        run: |
+          if [ -f server.pid ]; then kill "$(cat server.pid)" || true; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-schemathesis
+          path: schemathesis/report.xml
+
+  playwright:
+    name: playwright (defects on)
+    needs: plan
+    if: needs.plan.outputs.run_playwright == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            playwright/pnpm-lock.yaml
+      - name: Install web deps
+        working-directory: web
+        run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+      - name: Build web bundle with VITE_DEFECTS
+        working-directory: web
+        env:
+          VITE_USE_MOCKS: "false"
+        run: pnpm build
+      - name: Sync backend deps
+        working-directory: demo-app
+        run: uv sync
+      - name: Install Playwright
+        working-directory: playwright
+        run: |
+          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+          pnpm exec playwright install --with-deps
+      - name: Run Playwright (DEFECTS forwarded to backend by webServer)
+        working-directory: playwright
+        env:
+          CI: "true"
+        run: pnpm test || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-playwright
+          path: |
+            playwright/playwright-report
+            playwright/test-results
+
+  perf:
+    name: perf (defects on)
+    needs: plan
+    if: needs.plan.outputs.run_perf == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: qa-automation-lab:defect
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start container with DEFECTS=$DEFECTS
+        run: |
+          docker run -d --rm --name qal-defect -p 5050:5050 \
+            -e APP_ENV=test \
+            -e DEFECTS="$DEFECTS" \
+            qa-automation-lab:defect
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5050/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs qal-defect
+          exit 1
+      - uses: grafana/setup-k6-action@v1
+      - name: Run k6 smoke
+        env:
+          BASE_URL: http://localhost:5050
+          SUMMARY_FILE: perf/summary.json
+        run: k6 run perf/items_smoke.js || true
+      - name: Stop container
+        if: always()
+        run: docker stop qal-defect || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-perf
+          path: perf/summary.json
+
+  agent-review:
+    name: Agent review
+    needs: [plan, backend, pytest-api, schemathesis, playwright, perf]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Download every defect-run artifact
+        uses: actions/download-artifact@v8
+        with:
+          pattern: defect-run-*
+          path: _bundle
+      - name: Write run metadata
+        env:
+          DEFECTS_INPUT: ${{ inputs.defects }}
+          REQUESTOR: ${{ inputs.requestor }}
+          SUITES: ${{ needs.plan.outputs.suites }}
+        run: |
+          mkdir -p _bundle/meta
+          cat > _bundle/meta/run-meta.json <<JSON
+          {
+            "run_id": "${{ github.run_id }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "sha": "${{ github.sha }}",
+            "ref": "${{ github.ref }}",
+            "defects": "${DEFECTS_INPUT}",
+            "suites": "${SUITES}",
+            "requestor": "${REQUESTOR}",
+            "started_at": "${{ github.event.repository.pushed_at }}",
+            "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          JSON
+      - name: Run agent review (GitHub Models)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFECTS_INPUT: ${{ inputs.defects }}
+          BUNDLE_DIR: _bundle
+        run: node scripts/agent-review.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: defect-run-bundle
+          path: _bundle

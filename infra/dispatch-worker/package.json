@@ -1,0 +1,18 @@
+{
+  "name": "qa-automation-lab-dispatch-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker proxy for the qa-automation-lab defect-injection dashboard.",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

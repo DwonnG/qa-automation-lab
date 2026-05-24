@@ -1,0 +1,22 @@
+{
+  "defects": ["off_by_one_pagination"],
+  "totals": { "failed": 2, "passed": 16, "skipped": 0, "suiteCount": 2 },
+  "failures": [
+    {
+      "suite": "backend",
+      "classname": "tests.integration.test_items.TestCreateItem",
+      "name": "test_list_reflects_created_items",
+      "message": "assert len(response.json()) == 3 — got 2"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.items",
+      "name": "adds an item and shows it in the table",
+      "message": "expect(locator).toHaveCount(1) — received 0 for the new row"
+    }
+  ],
+  "perf_thresholds_passed": null,
+  "perf_summary": null,
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}

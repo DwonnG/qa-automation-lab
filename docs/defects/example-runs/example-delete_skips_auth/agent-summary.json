@@ -1,0 +1,22 @@
+{
+  "defects": ["delete_skips_auth"],
+  "totals": { "failed": 2, "passed": 14, "skipped": 0, "suiteCount": 2 },
+  "failures": [
+    {
+      "suite": "pytest-api",
+      "classname": "tests.test_items_crud",
+      "name": "test_delete_requires_bearer",
+      "message": "assert response.status_code == 401 — got 204"
+    },
+    {
+      "suite": "backend",
+      "classname": "tests.integration.test_error_handling.TestRequireBearer",
+      "name": "test_missing_bearer_returns_401",
+      "message": "assert response.status_code == 401 — got 204"
+    }
+  ],
+  "perf_thresholds_passed": null,
+  "perf_summary": null,
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}
