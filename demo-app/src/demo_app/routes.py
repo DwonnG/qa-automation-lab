@@ -164,9 +164,11 @@ async def create_item(
 ) -> ItemRead:
     try:
         raw = await request.json()
-    except json.JSONDecodeError as exc:
-        # Empty body or non-JSON payload. Surface as 422 with the standard
-        # FastAPI envelope rather than letting Starlette bubble it to 500.
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        # Empty body, non-JSON payload, or non-UTF-8 bytes. Surface as 422
+        # with the standard FastAPI envelope rather than letting Starlette
+        # bubble it to 500 (Schemathesis fuzzes with binary garbage and
+        # flags any 500 as an undocumented status code).
         raise RequestValidationError(
             [
                 {
