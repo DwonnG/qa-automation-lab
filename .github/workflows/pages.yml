@@ -131,10 +131,30 @@ jobs:
           EOF
 
       - name: Write CI metadata for the dashboard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.resolve.outputs.ci_run_id }}
         run: |
           set -euo pipefail
           mkdir -p _artifacts/ci-meta
           short_sha="$(echo "${{ steps.resolve.outputs.ci_sha }}" | cut -c1-7)"
+
+          # Pull wall-clock seconds for the CI run so the dashboard can
+          # report end-to-end pipeline time alongside summed test time.
+          # run_started_at is the moment the runner picked up the first
+          # job; updated_at is the run's final timestamp. We default
+          # wall_clock_sec to null when either value is missing so the
+          # dashboard can hide the tile cleanly.
+          wall_clock_sec="null"
+          if [ -n "${RUN_ID:-}" ]; then
+            run_json="$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" 2>/dev/null || echo '{}')"
+            started="$(echo "$run_json" | jq -r '.run_started_at // empty')"
+            ended="$(echo "$run_json" | jq -r '.updated_at // empty')"
+            if [ -n "$started" ] && [ -n "$ended" ]; then
+              wall_clock_sec="$(python3 -c "from datetime import datetime; s=datetime.fromisoformat('${started}'.replace('Z','+00:00')); e=datetime.fromisoformat('${ended}'.replace('Z','+00:00')); print(f'{(e-s).total_seconds():.1f}')")"
+            fi
+          fi
+
           cat > _artifacts/ci-meta/meta.json <<JSON
           {
             "sha": "${{ steps.resolve.outputs.ci_sha }}",
@@ -142,7 +162,8 @@ jobs:
             "ref": "main",
             "run_id": "${{ steps.resolve.outputs.ci_run_id }}",
             "run_url": "${{ steps.resolve.outputs.ci_run_url }}",
-            "triggered_at": "${{ steps.resolve.outputs.ci_at }}"
+            "triggered_at": "${{ steps.resolve.outputs.ci_at }}",
+            "wall_clock_sec": ${wall_clock_sec}
           }
           JSON
 

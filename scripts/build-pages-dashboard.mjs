@@ -559,7 +559,7 @@ function renderDashboard(data, suiteResults) {
             <a class="btn btn--ghost" href="${REPO_URL}" target="_blank" rel="noopener noreferrer">View on GitHub</a>
             <a class="btn btn--ghost" href="${REPO_URL}/actions" target="_blank" rel="noopener noreferrer">CI runs &rarr;</a>
           </div>
-          ${renderHeroMetrics(totals)}
+          ${renderHeroMetrics(totals, ci)}
           ${renderHeroMeta(ci, updated)}
         </div>
       </header>
@@ -658,10 +658,30 @@ function renderStatusBadge(overall, totals, ci, updated) {
   `;
 }
 
-function renderHeroMetrics(totals) {
+function renderHeroMetrics(totals, ci) {
   const passRate =
     totals.pass_rate === null ? "—" : `${(totals.pass_rate * 100).toFixed(1)}%`;
   const failing = totals.failures + totals.errors;
+
+  // "Test time" is the sum of every <testcase time="..."> across every
+  // suite, which is informative but NOT what a contributor sees in CI.
+  // The pages workflow records the triggering CI run's wall-clock
+  // duration in ci-meta so we can render the real pipeline time too.
+  // The wall-clock tile is hidden when meta lacks the value (older
+  // dashboards, manual-dispatch runs without a resolved CI run, etc.)
+  // so the layout stays clean at 5 tiles.
+  const wallClock =
+    typeof ci?.wall_clock_sec === "number" && ci.wall_clock_sec > 0
+      ? formatDuration(ci.wall_clock_sec)
+      : null;
+  const wallClockTile = wallClock
+    ? `
+      <div class="metric" title="End-to-end wall-clock time for the CI pipeline that produced these reports.">
+        <span class="metric-value">${wallClock}</span>
+        <span class="metric-label">Wall-clock</span>
+      </div>`
+    : "";
+
   return `
     <div class="metrics" aria-label="Aggregate test status">
       <div class="metric">
@@ -680,10 +700,11 @@ function renderHeroMetrics(totals) {
         <span class="metric-value">${passRate}</span>
         <span class="metric-label">Pass rate</span>
       </div>
-      <div class="metric">
+      <div class="metric" title="Sum of every JUnit <testcase> time across every suite. Suites run in parallel CI jobs, so this is greater than the wall-clock pipeline time.">
         <span class="metric-value">${formatDuration(totals.duration_sec)}</span>
-        <span class="metric-label">Duration</span>
+        <span class="metric-label">Test time</span>
       </div>
+      ${wallClockTile}
     </div>
   `;
 }

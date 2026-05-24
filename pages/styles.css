@@ -625,17 +625,14 @@ code {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* auto-fit lets the strip absorb extra tiles (e.g. wall-clock) without
+     re-laying out the breakpoint by hand. minmax(140px, 1fr) keeps tiles
+     readable on phones and lets desktop pack 5 or 6 in one row. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
   margin-top: 2.5rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border);
-}
-
-@media (min-width: 720px) {
-  .metrics {
-    grid-template-columns: repeat(5, 1fr);
-  }
 }
 
 .metric {
