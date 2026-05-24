@@ -1522,7 +1522,25 @@ function baseLayout({ title, body }) {
         <a href="${PAGES_BASE}/#sut">SUT</a>
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        aria-label="Open navigation menu"
+      >
+        <span class="nav-toggle__bar"></span>
+        <span class="nav-toggle__bar"></span>
+        <span class="nav-toggle__bar"></span>
+      </button>
     </nav>
+
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+      <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
+      <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
+      <a href="${PAGES_BASE}/#sut">SUT</a>
+      <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
 
     ${body}
 

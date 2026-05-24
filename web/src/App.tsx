@@ -23,7 +23,12 @@ export function App() {
   return (
     <>
       <DashboardLink />
-      <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 p-6">
+      {/* pt-16 leaves clearance for the fixed DashboardLink (top-left)
+          and any future floating chrome on the Pages build. At lg+ the
+          viewport is wide enough that max-w-3xl leaves side margins big
+          enough for the float to clear the header, so we restore the
+          original p-6 top padding. */}
+      <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 pb-6 pt-16 lg:pt-6">
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Items</h1>
