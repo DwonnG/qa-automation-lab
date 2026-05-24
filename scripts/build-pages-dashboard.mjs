@@ -541,7 +541,6 @@ function renderDashboard(data, suiteResults) {
       <header class="hero">
         <div class="hero-inner">
           <div class="hero-intro">
-            <div class="hero-mark" aria-hidden="true">QA</div>
             ${renderStatusBadge(overall, totals, ci, updated)}
           </div>
           <h1 class="hero-title">qa-automation-lab</h1>
