@@ -402,6 +402,8 @@
           clearTierMarks();
         } else if (failed > 0) {
           // The expected happy path for the demo: the pyramid caught it.
+          // The workflow itself will be conclusion=failure too (suite jobs
+          // no longer swallow test failures), which is the honest signal.
           msg =
             "Run #" +
             runId +
@@ -412,8 +414,21 @@
             " caught.";
           klass = "err";
           if (d && d.tier) markTierFailed(d.tier);
+        } else if (data.conclusion && data.conclusion !== "success") {
+          // Tests passed (failed=0) but the workflow itself failed →
+          // setup/env error (e.g. backend didn't start), not a coverage
+          // gap. Don't claim "escaped" — that would be misleading.
+          msg =
+            "Run #" +
+            runId +
+            " · workflow failed (" +
+            data.conclusion +
+            ") before tests could verdict the defect.";
+          klass = "err";
+          clearTierMarks();
         } else {
-          // Defect ran but no test failed → real coverage gap. Worth showing.
+          // Tests ran clean AND the workflow passed → real coverage gap.
+          // The defect made it through every suite that opted in to it.
           msg =
             "Run #" +
             runId +

@@ -111,9 +111,11 @@ jobs:
         run: uv sync
       - name: Run pytest with DEFECTS set
         working-directory: demo-app
-        # `|| true` so the artifact upload + agent-review still run.
-        run: |
-          uv run pytest --junitxml=report.xml || true
+        # No `|| true`: a defect that trips a test SHOULD fail this job
+        # (and therefore the workflow). The agent-review job uses
+        # `if: always()` so it still runs and writes the post-mortem on
+        # a failed suite. The artifact upload below is also `if: always()`.
+        run: uv run pytest --junitxml=report.xml
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -155,7 +157,7 @@ jobs:
         run: uv sync
       - name: Run pytest-api
         working-directory: pytest-api
-        run: uv run pytest --junitxml=report.xml || true
+        run: uv run pytest --junitxml=report.xml
       - name: Stop backend
         if: always()
         working-directory: demo-app
@@ -204,7 +206,7 @@ jobs:
         env:
           BASE_URL: http://localhost:5050
           DEMO_PIN: "000000"
-        run: uv run pytest --junitxml=report.xml || true
+        run: uv run pytest --junitxml=report.xml
       - name: Stop backend
         if: always()
         working-directory: demo-app
@@ -260,7 +262,7 @@ jobs:
         working-directory: playwright
         env:
           CI: "true"
-        run: pnpm test || true
+        run: pnpm test
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -304,7 +306,9 @@ jobs:
         env:
           BASE_URL: http://localhost:5050
           SUMMARY_FILE: perf/summary.json
-        run: k6 run perf/items_smoke.js || true
+        # k6 exits non-zero (typically 99) when any threshold breaches —
+        # for slow_query that's exactly what we want to flunk the job.
+        run: k6 run perf/items_smoke.js
       - name: Stop container
         if: always()
         run: docker stop qal-defect || true
