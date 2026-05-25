@@ -23,6 +23,8 @@
   var resultEl = panel.querySelector("[data-defect-result]");
   var runBtn = panel.querySelector(".defect-run-btn");
   var live = panel.getAttribute("data-live") === "true";
+  var runBtnDefaultLabel =
+    runBtn.getAttribute("data-default-label") || runBtn.textContent.trim();
 
   // ---------- helpers ------------------------------------------------------
 
@@ -39,6 +41,25 @@
     return Array.prototype.map.call(boxes, function (b) {
       return b.value;
     });
+  }
+
+  // Toggles the run button between idle (ghost, no count) and armed
+  // (primary, "Run with N defect(s)"). Hooked to the panel's change event.
+  function syncRunButton() {
+    if (!live) return;
+    var count = selectedDefects().length;
+    if (count === 0) {
+      runBtn.disabled = true;
+      runBtn.textContent = runBtnDefaultLabel;
+      runBtn.classList.remove("btn--primary");
+      runBtn.classList.add("btn--ghost");
+    } else {
+      runBtn.disabled = false;
+      runBtn.textContent =
+        "Run with " + count + " defect" + (count === 1 ? "" : "s");
+      runBtn.classList.remove("btn--ghost");
+      runBtn.classList.add("btn--primary");
+    }
   }
 
   function affectedTiers() {
@@ -180,6 +201,13 @@
 
   if (!live || !DISPATCH_URL) return;
 
+  panel.addEventListener("change", function (e) {
+    if (e.target && e.target.matches('input[type="checkbox"][name="defect"]')) {
+      syncRunButton();
+    }
+  });
+  syncRunButton();
+
   runBtn.addEventListener("click", function () {
     var defects = selectedDefects();
     if (defects.length === 0) {
@@ -215,7 +243,7 @@
         pollRun(runId, tiers);
       })
       .catch(function (err) {
-        runBtn.disabled = false;
+        syncRunButton();
         clearTierMarks();
         setStatus("Dispatch failed: " + err.message, "err");
       });
@@ -249,7 +277,7 @@
               setTimeout(poll, 5000);
             } else {
               clearTierMarks();
-              runBtn.disabled = false;
+              syncRunButton();
               setStatus("Timed out waiting for run #" + runId + ".", "err");
             }
             return;
@@ -258,7 +286,7 @@
         })
         .catch(function (err) {
           clearTierMarks();
-          runBtn.disabled = false;
+          syncRunButton();
           setStatus("Poll failed: " + err.message, "err");
         });
     };
@@ -281,7 +309,7 @@
       .then(function (parts) {
         var md = parts[0] || "";
         var summary = parts[1];
-        runBtn.disabled = false;
+        syncRunButton();
         clearTierMarks();
         if (summary && summary.totals && summary.totals.failed > 0) {
           markTiersFailed(tiers);
@@ -311,7 +339,7 @@
         );
       })
       .catch(function (err) {
-        runBtn.disabled = false;
+        syncRunButton();
         setStatus("Loaded run but failed to render: " + err.message, "err");
       });
   }

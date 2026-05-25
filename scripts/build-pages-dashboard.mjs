@@ -1280,8 +1280,10 @@ function renderDefectsSection(catalog) {
   const rows = catalog
     .map((d) => {
       const tier = TIER_LABELS[d.tier] || escapeHtml(d.tier || "");
+      // Visible line is CSS-truncated to a single line; the full body is
+      // exposed via the row's `title` tooltip for at-a-glance hover.
       const summary = escapeHtml(
-        (d.summary || "").split("\n").slice(0, 2).join(" ").slice(0, 240),
+        (d.summary || "").split("\n")[0].slice(0, 200),
       );
       return `
         <li class="defect-row" data-defect-id="${escapeAttr(d.id)}" data-tier="${escapeAttr(d.tier || "")}">
@@ -1296,19 +1298,19 @@ function renderDefectsSection(catalog) {
             <div class="defect-row-body">
               <div class="defect-row-head">
                 <code class="defect-row-id">${escapeHtml(d.id)}</code>
-                <span class="defect-row-tier">${escapeHtml(tier)} tier</span>
+                <span class="defect-row-tier">${escapeHtml(tier)}</span>
                 ${
                   d.visible_in_browser
                     ? `<span class="defect-row-flag" title="Toggle the in-browser SUT to see this defect immediately">in-browser</span>`
                     : ""
                 }
               </div>
-              <p class="defect-row-summary">${summary}</p>
+              <p class="defect-row-summary" title="${escapeAttr(d.summary || "")}">${summary}</p>
             </div>
           </label>
           <div class="defect-row-actions">
-            <a class="defect-row-link" href="${REPO_URL}/blob/main/docs/defects/${escapeAttr(d.id)}.md" target="_blank" rel="noopener noreferrer" title="Read the full defect spec">spec ↗</a>
-            <a class="defect-row-link" href="${PAGES_BASE}/defect-runs/example-${escapeAttr(d.id)}/" data-defect-example="${escapeAttr(d.id)}">example run</a>
+            <a class="defect-row-cta" href="${PAGES_BASE}/defect-runs/example-${escapeAttr(d.id)}/" data-defect-example="${escapeAttr(d.id)}">Example run</a>
+            <a class="defect-row-link" href="${REPO_URL}/blob/main/docs/defects/${escapeAttr(d.id)}.md" target="_blank" rel="noopener noreferrer" title="Read the full defect spec">spec&nbsp;↗</a>
           </div>
         </li>
       `;
@@ -1327,11 +1329,12 @@ function renderDefectsSection(catalog) {
         <div class="defect-panel-footer">
           <button
             type="button"
-            class="btn btn--primary defect-run-btn"
+            class="btn btn--ghost defect-run-btn"
             data-testid="defect-run-btn"
-            ${live ? "" : "disabled"}
+            data-default-label="${live ? "Select at least one defect" : "Configure DEFECT_DISPATCH_URL to enable"}"
+            ${live ? "disabled" : "disabled"}
           >
-            ${live ? "Run with selected defects" : "Configure DEFECT_DISPATCH_URL to enable"}
+            ${live ? "Select at least one defect" : "Configure DEFECT_DISPATCH_URL to enable"}
           </button>
           <p class="defect-panel-status" data-defect-status role="status" aria-live="polite"></p>
         </div>

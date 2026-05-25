@@ -2090,17 +2090,25 @@ code {
 }
 .defect-row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 60%, transparent);
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 .defect-row:hover {
-  border-color: var(--border-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: color-mix(in srgb, var(--bg) 75%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.defect-row:has(input[type="checkbox"]:checked) {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 35%, transparent);
 }
 .defect-row-toggle {
   display: flex;
@@ -2161,14 +2169,39 @@ code {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .defect-row-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.6rem;
   flex: none;
+}
+.defect-row-cta {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 55%, transparent);
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+.defect-row-cta:hover,
+.defect-row-cta:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 90%, transparent);
+  transform: translateY(-1px);
 }
 .defect-row-link {
   font-size: 0.7rem;
@@ -2304,7 +2337,7 @@ code {
 .lab-tier--defect-pending {
   outline: 2px dashed var(--warn);
   outline-offset: 2px;
-  animation: defect-pulse 1.8s ease-in-out infinite;
+  animation: defect-pulse 1.6s ease-in-out infinite;
 }
 .lab-tier--defect-failed {
   outline: 2px solid var(--bad);
@@ -2314,9 +2347,33 @@ code {
 @keyframes defect-pulse {
   0%,
   100% {
-    outline-color: color-mix(in srgb, var(--warn) 70%, transparent);
+    outline-color: color-mix(in srgb, var(--warn) 80%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 22%, transparent);
   }
   50% {
     outline-color: color-mix(in srgb, var(--warn) 30%, transparent);
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--warn) 6%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lab-tier--defect-pending {
+    animation: none;
+  }
+}
+
+/* Mobile: stack the checkbox/summary above the action pills so neither
+   gets crushed at narrow widths. */
+@media (max-width: 640px) {
+  .defect-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .defect-row-actions {
+    justify-content: flex-end;
+    padding-left: 1.65rem;
+  }
+  .defect-row-summary {
+    white-space: normal;
   }
 }
