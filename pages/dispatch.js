@@ -27,6 +27,7 @@
   var resultEl = panel.querySelector("[data-defect-result]");
   var live = panel.getAttribute("data-live") === "true";
   var selectedId = "";
+  var running = false;
 
   var catalogNode = panel.querySelector("[data-defect-catalog]");
   var catalog = {};
@@ -56,6 +57,13 @@
     document.querySelectorAll(".lab-tier").forEach(function (el) {
       el.classList.remove("lab-tier--defect-pending");
       el.classList.remove("lab-tier--defect-failed");
+      var chip = el.querySelector(".lab-tier-head .status-chip");
+      if (chip && chip.hasAttribute("data-defect-orig")) {
+        chip.textContent = chip.getAttribute("data-defect-orig") || "";
+        chip.className = chip.getAttribute("data-defect-orig-class") || "";
+        chip.removeAttribute("data-defect-orig");
+        chip.removeAttribute("data-defect-orig-class");
+      }
     });
   }
 
@@ -67,11 +75,20 @@
     });
   }
 
-  function markTierFailed(tierKey) {
+  function markTierFailed(tierKey, count) {
     if (!tierKey) return;
     document.querySelectorAll(".lab-tier--" + tierKey).forEach(function (el) {
       el.classList.remove("lab-tier--defect-pending");
       el.classList.add("lab-tier--defect-failed");
+      var chip = el.querySelector(".lab-tier-head .status-chip");
+      if (!chip) return;
+      if (!chip.hasAttribute("data-defect-orig")) {
+        chip.setAttribute("data-defect-orig", chip.textContent || "");
+        chip.setAttribute("data-defect-orig-class", chip.className);
+      }
+      var n = typeof count === "number" && count > 0 ? count : 0;
+      chip.textContent = n ? "× " + n + " caught" : "defect caught";
+      chip.className = "status-chip status-chip--bad lab-tier-defect-chip";
     });
   }
 
@@ -98,6 +115,15 @@
     var out = [];
     var inList = false;
     lines.forEach(function (line) {
+      var trimmed = line.trim();
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+        if (inList) {
+          out.push("</ul>");
+          inList = false;
+        }
+        out.push('<hr class="defect-result-hr"/>');
+        return;
+      }
       var m = line.match(/^[-*]\s+(.*)$/);
       if (m) {
         if (!inList) {
@@ -121,11 +147,28 @@
   function showResult(html) {
     resultEl.innerHTML = html;
     resultEl.hidden = false;
+    resultEl.classList.remove("is-collapsed");
   }
 
   function dismissResult() {
     resultEl.hidden = true;
     resultEl.innerHTML = "";
+    setRunning(false);
+  }
+
+  function setRunning(on) {
+    running = !!on;
+    panel.classList.toggle("defect-injector--running", running);
+    var cards = pillGroup.querySelectorAll("[data-defect-pill]");
+    cards.forEach(function (c) {
+      if (running) {
+        c.setAttribute("aria-disabled", "true");
+        c.setAttribute("tabindex", "-1");
+      } else {
+        c.removeAttribute("aria-disabled");
+        c.removeAttribute("tabindex");
+      }
+    });
   }
 
   function resultCloseButton() {
@@ -136,10 +179,32 @@
     );
   }
 
+  function resultCollapseButton() {
+    return (
+      '<button type="button" class="defect-result-collapse" ' +
+      'data-defect-result-collapse aria-expanded="true" ' +
+      'aria-label="Collapse result panel" title="Collapse">' +
+      '<span class="defect-result-collapse-chevron" aria-hidden="true">▾</span>' +
+      "</button>"
+    );
+  }
+
   resultEl.addEventListener("click", function (e) {
     if (e.target.closest("[data-defect-result-close]")) {
       e.preventDefault();
       dismissResult();
+      return;
+    }
+    var toggle = e.target.closest("[data-defect-result-collapse]");
+    if (toggle) {
+      e.preventDefault();
+      var collapsed = resultEl.classList.toggle("is-collapsed");
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      toggle.setAttribute(
+        "aria-label",
+        collapsed ? "Expand result panel" : "Collapse result panel",
+      );
+      toggle.setAttribute("title", collapsed ? "Expand" : "Collapse");
     }
   });
   document.addEventListener("keydown", function (e) {
@@ -211,6 +276,7 @@
   pillGroup.addEventListener("click", function (e) {
     var card = e.target.closest("[data-defect-pill]");
     if (!card || !pillGroup.contains(card)) return;
+    if (running) return;
     var id = card.getAttribute("data-defect-pill");
     setSelected(id === selectedId ? "" : id);
   });
@@ -221,25 +287,37 @@
     var link = e.target.closest("[data-defect-example]");
     if (!link) return;
     e.preventDefault();
+    if (running) return;
     var id = link.getAttribute("data-defect-example");
     var d = catalog[id];
     var label = (d && d.title) || id;
     var base = RUNS_BASE + "example-" + id + "/";
     setStatus("Loading example output for " + label + "…", "info");
-    fetch(base + "agent-feedback.md", { cache: "no-cache" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.text();
-      })
-      .then(function (md) {
-        if (d && d.tier) markTierFailed(d.tier);
-        var title = (d && d.title) || id;
+    Promise.all([
+      fetch(base + "agent-feedback.md", { cache: "no-cache" }).then(
+        function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        },
+      ),
+      fetch(base + "agent-summary.json", { cache: "no-cache" })
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .catch(function () {
+          return null;
+        }),
+    ])
+      .then(function (parts) {
+        var md = parts[0];
+        var summary = parts[1];
+        var failed = summary && summary.totals ? summary.totals.failed || 0 : 0;
+        if (d && d.tier) markTierFailed(d.tier, failed);
         showResult(
           '<header class="defect-result-head">' +
-            '<span class="defect-result-tag">Example output · ' +
-            escapeHtml(title) +
-            "</span>" +
+            '<span class="defect-result-tag">Example output</span>' +
             '<span class="defect-result-spacer"></span>' +
+            resultCollapseButton() +
             resultCloseButton() +
             "</header>" +
             '<div class="defect-result-body">' +
@@ -272,6 +350,7 @@
     var label = (d && d.title) || id;
     btn.disabled = true;
     dismissResult();
+    setRunning(true);
     if (d && d.tier) markTierPending(d.tier);
     setStatus("Dispatching workflow for " + label + "…", "info");
 
@@ -291,11 +370,12 @@
       .then(function (data) {
         var runId = data.run_id;
         if (!runId) throw new Error("worker did not return a run_id");
-        setStatus("Run #" + runId + " queued. Polling…", "info");
+        setStatus("Queued · waiting for runner…", "info");
         pollRun(runId, id, btn);
       })
       .catch(function (err) {
         btn.disabled = false;
+        setRunning(false);
         clearTierMarks();
         setStatus("Dispatch failed: " + err.message, "err");
       });
@@ -313,24 +393,21 @@
         })
         .then(function (data) {
           if (data.status !== "completed") {
-            setStatus(
-              "Run #" +
-                runId +
-                " " +
-                (data.status || "running") +
-                "… (" +
-                attempts +
-                "/" +
-                maxAttempts +
-                ")",
-              "info",
-            );
+            var elapsed = attempts * 5;
+            var phase =
+              data.status === "queued"
+                ? "Queued"
+                : data.status === "in_progress"
+                  ? "Tests running"
+                  : "Running";
+            setStatus(phase + "… (" + elapsed + "s elapsed)", "info");
             if (attempts < maxAttempts) {
               setTimeout(poll, 5000);
             } else {
               btn.disabled = false;
+              setRunning(false);
               clearTierMarks();
-              setStatus("Timed out waiting for run #" + runId + ".", "err");
+              setStatus("Timed out waiting for tests to finish.", "err");
             }
             return;
           }
@@ -338,6 +415,7 @@
         })
         .catch(function (err) {
           btn.disabled = false;
+          setRunning(false);
           clearTierMarks();
           setStatus("Poll failed: " + err.message, "err");
         });
@@ -362,6 +440,7 @@
         var md = parts[0] || "";
         var summary = parts[1];
         btn.disabled = false;
+        setRunning(false);
         var d = catalog[defectId];
         var failed =
           summary && summary.totals ? summary.totals.failed || 0 : null;
@@ -375,54 +454,27 @@
         var msg;
         var klass;
         if (failed === null) {
-          // No summary returned (worker hiccup) — fall back to run conclusion.
           msg =
-            "Run #" +
-            runId +
-            " complete. Conclusion: " +
-            (data.conclusion || "unknown") +
-            ".";
+            "Run complete. Conclusion: " + (data.conclusion || "unknown") + ".";
           klass = data.conclusion === "success" ? "ok" : "err";
           clearTierMarks();
         } else if (agentStatus && agentStatus !== "ok") {
-          msg =
-            "Run #" +
-            runId +
-            " · agent error (" +
-            agentStatus +
-            "). No review available.";
+          msg = "Agent error (" + agentStatus + "). No review available.";
           klass = "err";
           clearTierMarks();
         } else if (failed > 0) {
-          // The expected happy path for the demo: the pyramid caught it.
-          // The workflow itself will be conclusion=failure too (suite jobs
-          // no longer swallow test failures), which is the honest signal.
-          msg =
-            "Run #" +
-            runId +
-            " · " +
-            failed +
-            " failure" +
-            (failed === 1 ? "" : "s") +
-            " caught.";
+          msg = failed + " failure" + (failed === 1 ? "" : "s") + " caught.";
           klass = "err";
-          if (d && d.tier) markTierFailed(d.tier);
+          if (d && d.tier) markTierFailed(d.tier, failed);
         } else if (data.conclusion && data.conclusion !== "success") {
-          // Tests passed (failed=0) but the workflow itself failed →
-          // setup/env error (e.g. backend didn't start), not a coverage
-          // gap. Don't claim "escaped" — that would be misleading.
           msg =
-            "Run #" +
-            runId +
-            " · workflow failed (" +
+            "Workflow failed (" +
             data.conclusion +
             ") before tests could verdict the defect.";
           klass = "err";
           clearTierMarks();
         } else {
-          // Tests ran clean AND the workflow passed → real coverage gap.
-          // The defect made it through every suite that opted in to it.
-          msg = "Run #" + runId + " · defect escaped — no tests caught it.";
+          msg = "Defect escaped — no tests caught it.";
           klass = "warn";
           clearTierMarks();
         }
@@ -430,15 +482,16 @@
 
         showResult(
           '<header class="defect-result-head">' +
-            '<span class="defect-result-tag">Run #' +
-            runId +
-            "</span>" +
+            '<span class="defect-result-tag">Live run</span>' +
             (data.run_url
-              ? ' <a href="' +
+              ? ' <a class="defect-result-runlink" href="' +
                 data.run_url +
-                '" target="_blank" rel="noopener">view in Actions ↗</a>'
+                '" target="_blank" rel="noopener" title="Run #' +
+                escapeHtml(String(runId)) +
+                '">view in Actions ↗</a>'
               : "") +
             '<span class="defect-result-spacer"></span>' +
+            resultCollapseButton() +
             resultCloseButton() +
             "</header>" +
             '<div class="defect-result-body">' +
@@ -448,6 +501,7 @@
       })
       .catch(function (err) {
         btn.disabled = false;
+        setRunning(false);
         setStatus("Loaded run but failed to render: " + err.message, "err");
       });
   }
