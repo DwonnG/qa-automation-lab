@@ -1283,11 +1283,23 @@ const CATEGORY_LABELS = {
   perf: "PERF",
 };
 
+// Inline SVG icons keyed by defect id. Lucide-ish stroke style at 24px
+// canvas so they scale cleanly inside the round icon badges.
+const DEFECT_ICONS = {
+  login_accepts_any_pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`,
+  delete_skips_auth: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  negative_qty_allowed: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.5 7 12 12 20.5 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>`,
+  off_by_one_pagination: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="4" cy="18" r="1.5"/></svg>`,
+  slow_query: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>`,
+};
+
+const DEFECT_CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>`;
+
 function renderDefectInjector(catalog) {
   if (catalog.length === 0) return "";
   const live = Boolean(DEFECT_DISPATCH_URL);
 
-  // Order pills top-of-pyramid down so the pill flow mirrors the
+  // Order cards top-of-pyramid down so the card flow mirrors the
   // pyramid's silhouette on the left.
   const tierOrder = ["ui", "api", "integration", "component", "unit"];
   const sorted = [...catalog].sort((a, b) => {
@@ -1297,15 +1309,31 @@ function renderDefectInjector(catalog) {
     return (a.title || a.id).localeCompare(b.title || b.id);
   });
 
-  const pills = sorted
+  const cards = sorted
     .map((d) => {
       const tierKey = (d.tier || "").toLowerCase();
-      return `<button type="button" class="defect-injector-pill defect-injector-pill--tier-${escapeAttr(tierKey)}" data-defect-pill="${escapeAttr(d.id)}" role="radio" aria-checked="false"><span class="defect-injector-pill-dot" aria-hidden="true"></span><span class="defect-injector-pill-label">${escapeHtml(d.title || d.id)}</span></button>`;
+      const catKey = (d.category || "").toLowerCase();
+      const tags = [
+        CATEGORY_LABELS[catKey] || catKey.toUpperCase(),
+        TIER_LABELS[d.tier] || (d.tier || "").toUpperCase(),
+        d.visible_in_browser ? "IN-BROWSER" : "",
+      ].filter(Boolean);
+      const tagsHtml = tags
+        .map(
+          (t, i) =>
+            (i > 0
+              ? `<span class="defect-card-tag-sep" aria-hidden="true">•</span>`
+              : "") +
+            `<span class="defect-card-tag${t === "IN-BROWSER" ? " defect-card-tag--alt" : ""}">${escapeHtml(t)}</span>`,
+        )
+        .join("");
+      const glyph = DEFECT_ICONS[d.id] || "";
+      return `<button type="button" class="defect-card defect-card--tier-${escapeAttr(tierKey)} defect-card--cat-${escapeAttr(catKey)}" data-defect-pill="${escapeAttr(d.id)}" role="radio" aria-checked="false"><span class="defect-card-icon" aria-hidden="true"><span class="defect-card-icon-glyph">${glyph}</span><span class="defect-card-icon-check">${DEFECT_CHECK_SVG}</span></span><span class="defect-card-body"><span class="defect-card-title">${escapeHtml(d.title || d.id)}</span><span class="defect-card-tags">${tagsHtml}</span></span></button>`;
     })
     .join("");
 
-  // Inline catalog JSON so the pill handler can populate the detail
-  // card and resolve tier/spec links without a second HTTP roundtrip.
+  // Inline catalog JSON so the card handler can populate the action
+  // row and resolve tier/spec links without a second HTTP roundtrip.
   const catalogJson = JSON.stringify(
     Object.fromEntries(
       catalog.map((d) => {
@@ -1333,17 +1361,16 @@ function renderDefectInjector(catalog) {
     <div class="section-head section-head--minor">
       <p class="eyebrow"><span class="eyebrow-num">02</span> Defect injection</p>
       <h3>Flip a bug, watch the pyramid catch it</h3>
+      <p class="defect-injector-lede">Pick a defect and dispatch a real CI run. The matching tier band flips when the run completes and an AI agent will provide an explanation of the failure below.</p>
     </div>
     <div class="defect-injector" data-live="${live ? "true" : "false"}">
       <script type="application/json" data-defect-catalog>${catalogJson}</script>
-      <div class="defect-injector-field">
-        <span class="defect-injector-field-label">Inject defect</span>
-        <div class="defect-injector-pills" role="radiogroup" aria-label="Choose a defect to inject" data-defect-pills>
-          ${pills}
-        </div>
+      <p class="defect-injector-field-label">Select defect to inject</p>
+      <div class="defect-card-list" role="radiogroup" aria-label="Choose a defect to inject" data-defect-pills>
+        ${cards}
       </div>
 
-      <div class="defect-injector-detail" hidden data-defect-detail aria-live="polite"></div>
+      <div class="defect-injector-actions" hidden data-defect-actions></div>
 
       <p class="defect-injector-status" data-defect-status role="status" aria-live="polite"></p>
       <div class="defect-injector-result" hidden data-defect-result></div>

@@ -2134,93 +2134,227 @@ code {
   text-transform: uppercase;
   color: var(--accent-muted);
 }
-/* Defect pill group: wraps to multiple rows inside the injector frame.
-   Behaves as a single-select radio group — one selected pill at a time,
-   click again to deselect. Pills carry the same visual weight as other
-   small chips in the dashboard (status-chip, defect-row-cat) so they
-   don't introduce a new control language. */
-.defect-injector-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-.defect-injector-pill {
-  --pill-tier-color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 3%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  border-radius: 999px;
-  padding: 0.42rem 0.9rem 0.42rem 0.7rem;
-  cursor: pointer;
-  text-align: left;
-  line-height: 1.2;
-  transition:
-    border-color 0.18s var(--ease-out),
-    background-color 0.18s var(--ease-out),
-    box-shadow 0.18s var(--ease-out),
-    transform 0.12s var(--ease-out);
-}
-.defect-injector-pill:hover {
-  border-color: color-mix(in srgb, var(--pill-tier-color) 40%, var(--border));
-  background-color: color-mix(
-    in srgb,
-    var(--pill-tier-color) 6%,
-    color-mix(in srgb, var(--text) 4%, transparent)
-  );
-}
-.defect-injector-pill:focus-visible {
-  outline: 2px solid var(--pill-tier-color);
-  outline-offset: 2px;
-}
-.defect-injector-pill:active {
-  transform: translateY(1px);
-}
-.defect-injector-pill-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--pill-tier-color);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--pill-tier-color) 18%, transparent);
-  flex: 0 0 auto;
-}
-.defect-injector-pill-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 22ch;
-}
-.defect-injector-pill--selected {
-  color: var(--text);
-  background-color: color-mix(in srgb, var(--pill-tier-color) 18%, transparent);
-  border-color: color-mix(in srgb, var(--pill-tier-color) 65%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--pill-tier-color) 45%, transparent),
-    0 4px 14px -8px color-mix(in srgb, var(--pill-tier-color) 60%, transparent);
+/* Section lede: short prose under the section head explaining the
+   interaction model. Sits between the H3 and the card list. */
+.defect-injector-lede {
+  margin: 0.4rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  max-width: 52ch;
 }
 
-/* Per-tier accents so each pill quietly belongs to its pyramid layer.
-   The dot, hover ring, and selected glow all derive from these. */
-.defect-injector-pill--tier-ui {
-  --pill-tier-color: #6ec6c5; /* teal — UI E2E */
+/* Defect card list: vertical stack of icon + title + tags cards.
+   Single-select radio group — one card active at a time, click again to
+   deselect. Each card carries a tier-tinted accent so it visibly belongs
+   to its pyramid layer. A dashed connector line links consecutive
+   cards (drawn between successive icon badges) so the list reads as a
+   pipeline of related items rather than a flat menu. */
+.defect-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
 }
-.defect-injector-pill--tier-api {
-  --pill-tier-color: #8aa2d6; /* indigo — API */
+.defect-card {
+  --card-tier-color: var(--accent);
+  --card-icon-size: 44px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--card-icon-size) 1fr;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 1rem 0.55rem 0.55rem;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background-color 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out),
+    transform 0.12s var(--ease-out);
 }
-.defect-injector-pill--tier-component {
-  --pill-tier-color: #b48cc4; /* purple — Component */
+.defect-card:hover {
+  border-color: color-mix(in srgb, var(--card-tier-color) 45%, var(--border));
+  background-color: color-mix(
+    in srgb,
+    var(--card-tier-color) 5%,
+    color-mix(in srgb, var(--text) 3%, transparent)
+  );
 }
-.defect-injector-pill--tier-integration {
-  --pill-tier-color: #cf8b9b; /* rose — Integration */
+.defect-card:focus-visible {
+  outline: 2px solid var(--card-tier-color);
+  outline-offset: 3px;
 }
-.defect-injector-pill--tier-unit {
-  --pill-tier-color: #d28a8a; /* wine — Unit */
+.defect-card:active {
+  transform: translateY(1px);
+}
+
+/* Connector: dashed vertical line that bridges this card's icon to the
+   previous card's icon. Skip on the first card. Lives inside the card so
+   it inherits the tier color of THIS card; visually it reads as the
+   "wire" leading into the icon. */
+.defect-card + .defect-card::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--card-icon-size) / 2 + 0.55rem - 1px);
+  top: calc(-0.85rem - 2px);
+  width: 2px;
+  height: 0.85rem;
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--card-tier-color) 55%, transparent) 0,
+    color-mix(in srgb, var(--card-tier-color) 55%, transparent) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  background-size: 100% 6px;
+  background-repeat: repeat-y;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* Icon badge: round, tier-colored ring around the glyph by default.
+   Flips to a filled tier-colored disc with a white check on select. */
+.defect-card-icon {
+  position: relative;
+  width: var(--card-icon-size);
+  height: var(--card-icon-size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--card-tier-color) 8%, transparent);
+  border: 1.5px solid
+    color-mix(in srgb, var(--card-tier-color) 65%, transparent);
+  color: var(--card-tier-color);
+  transition:
+    background-color 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    color 0.2s var(--ease-out);
+}
+.defect-card-icon-glyph,
+.defect-card-icon-check {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out);
+}
+.defect-card-icon-glyph svg,
+.defect-card-icon-check svg {
+  width: 56%;
+  height: 56%;
+}
+.defect-card-icon-check {
+  opacity: 0;
+  transform: scale(0.65);
+  color: #fff;
+}
+
+/* Body: title (mono, prominent) + tags (small, tier-colored). Tags use
+   bullet separators to read as one inline run. */
+.defect-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.defect-card-title {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  line-height: 1.3;
+  /* No nowrap/ellipsis: at the reduced size every title in the catalog
+     fits on one line at the sidebar's expected width, and on the off
+     chance a future title is longer it wraps cleanly to a second line
+     instead of vanishing into "…". */
+}
+.defect-card-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--card-tier-color) 85%, var(--text-secondary));
+}
+.defect-card-tag {
+  white-space: nowrap;
+}
+.defect-card-tag--alt {
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+}
+.defect-card-tag-sep {
+  opacity: 0.55;
+  font-weight: 700;
+}
+
+/* Selected state: solid tier-colored icon disc with white checkmark,
+   stronger border around the card, soft tier-colored bloom. */
+.defect-card--selected {
+  border-color: color-mix(in srgb, var(--card-tier-color) 70%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--card-tier-color) 8%,
+    transparent
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--card-tier-color) 35%, transparent),
+    0 6px 22px -10px color-mix(in srgb, var(--card-tier-color) 60%, transparent);
+}
+.defect-card--selected .defect-card-icon {
+  background-color: var(--card-tier-color);
+  border-color: var(--card-tier-color);
+  color: #fff;
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--card-tier-color) 22%, transparent);
+}
+.defect-card--selected .defect-card-icon-glyph {
+  opacity: 0;
+  transform: scale(0.65);
+}
+.defect-card--selected .defect-card-icon-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Per-tier accents — mirror the pyramid band hues so each card quietly
+   belongs to its layer. */
+.defect-card--tier-ui {
+  --card-tier-color: #6ec6c5; /* teal — UI E2E */
+}
+.defect-card--tier-api {
+  --card-tier-color: #8aa2d6; /* indigo — API */
+}
+.defect-card--tier-component {
+  --card-tier-color: #b48cc4; /* purple — Component */
+}
+.defect-card--tier-integration {
+  --card-tier-color: #cf8b9b; /* rose — Integration */
+}
+.defect-card--tier-unit {
+  --card-tier-color: #d28a8a; /* wine — Unit */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .defect-card,
+  .defect-card-icon,
+  .defect-card-icon-glyph,
+  .defect-card-icon-check {
+    transition: none;
+  }
 }
 /* Detail card: the selected defect's category / tier / title / summary / actions.
    Sits inside the injector frame as a nested widget — same chrome as
@@ -2271,6 +2405,9 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed color-mix(in srgb, var(--text) 10%, transparent);
 }
 .defect-injector-actions .btn {
   font-size: 0.75rem;

@@ -22,7 +22,7 @@
   if (!panel) return;
 
   var pillGroup = panel.querySelector("[data-defect-pills]");
-  var detailEl = panel.querySelector("[data-defect-detail]");
+  var actionsEl = panel.querySelector("[data-defect-actions]");
   var statusEl = panel.querySelector("[data-defect-status]");
   var resultEl = panel.querySelector("[data-defect-result]");
   var live = panel.getAttribute("data-live") === "true";
@@ -148,51 +148,24 @@
     }
   });
 
-  // ---------- detail card rendering ---------------------------------------
+  // ---------- action-bar rendering ----------------------------------------
+  // The card itself shows title + tags, so the action bar below only
+  // needs the contextual CTAs: Example output, Run live, and spec link.
 
-  function renderDetail(id) {
+  function renderActions(id) {
     var d = catalog[id];
     if (!d) {
-      detailEl.hidden = true;
-      detailEl.innerHTML = "";
+      actionsEl.hidden = true;
+      actionsEl.innerHTML = "";
       return;
     }
-
-    var category = d.categoryLabel
-      ? '<span class="defect-row-cat defect-row-cat--' +
-        escapeHtml(d.category) +
-        '">' +
-        escapeHtml(d.categoryLabel) +
-        "</span>"
-      : "";
-    var tier = d.tierLabel
-      ? '<span class="defect-injector-tier">' +
-        escapeHtml(d.tierLabel) +
-        "</span>"
-      : "";
-    var inBrowser = d.visibleInBrowser
-      ? '<span class="defect-row-flag" title="Toggle the in-browser SUT to see this defect immediately">in-browser</span>'
-      : "";
-
     var runBtn = live
       ? '<button type="button" class="btn btn--primary defect-injector-run" data-defect-run="' +
         escapeHtml(id) +
         '">Run live &#9654;</button>'
       : '<button type="button" class="btn btn--primary" disabled title="Live runs are disabled in this deploy (DEFECT_DISPATCH_URL not configured)">Run live &#9654;</button>';
 
-    detailEl.innerHTML =
-      '<div class="defect-injector-detail-head">' +
-      category +
-      tier +
-      inBrowser +
-      "</div>" +
-      '<h4 class="defect-injector-title">' +
-      escapeHtml(d.title || id) +
-      "</h4>" +
-      '<p class="defect-injector-summary">' +
-      escapeHtml(d.summary || "") +
-      "</p>" +
-      '<div class="defect-injector-actions">' +
+    actionsEl.innerHTML =
       '<a class="btn btn--ghost defect-injector-example" href="' +
       escapeHtml(d.exampleUrl) +
       '" data-defect-example="' +
@@ -201,25 +174,24 @@
       runBtn +
       '<a class="defect-injector-spec" href="' +
       escapeHtml(d.specUrl) +
-      '" target="_blank" rel="noopener noreferrer">spec&nbsp;&#8599;</a>' +
-      "</div>";
-    detailEl.hidden = false;
+      '" target="_blank" rel="noopener noreferrer">spec&nbsp;&#8599;</a>';
+    actionsEl.hidden = false;
   }
 
-  // ---------- pill group change handler -----------------------------------
+  // ---------- card group change handler -----------------------------------
   //
-  // Behaves like a single-select radio group: clicking a pill selects it,
-  // clicking the active pill again deselects (so the user can clear
-  // without a separate button). Mouse + keyboard both go through the
-  // same path because the pills are real <button> elements.
+  // Single-select radio group: clicking a card selects it, clicking the
+  // active card again deselects (so the user can clear without a separate
+  // button). Mouse + keyboard both go through the same path because the
+  // cards are real <button> elements.
 
   function setSelected(id) {
     selectedId = id || "";
-    var pills = pillGroup.querySelectorAll("[data-defect-pill]");
-    pills.forEach(function (p) {
-      var active = p.getAttribute("data-defect-pill") === selectedId;
-      p.setAttribute("aria-checked", active ? "true" : "false");
-      p.classList.toggle("defect-injector-pill--selected", active);
+    var cards = pillGroup.querySelectorAll("[data-defect-pill]");
+    cards.forEach(function (c) {
+      var active = c.getAttribute("data-defect-pill") === selectedId;
+      c.setAttribute("aria-checked", active ? "true" : "false");
+      c.classList.toggle("defect-card--selected", active);
     });
 
     dismissResult();
@@ -227,19 +199,19 @@
 
     if (!selectedId) {
       clearTierMarks();
-      detailEl.hidden = true;
-      detailEl.innerHTML = "";
+      actionsEl.hidden = true;
+      actionsEl.innerHTML = "";
       return;
     }
     var d = catalog[selectedId];
     if (d && d.tier) markTierPending(d.tier);
-    renderDetail(selectedId);
+    renderActions(selectedId);
   }
 
   pillGroup.addEventListener("click", function (e) {
-    var pill = e.target.closest("[data-defect-pill]");
-    if (!pill || !pillGroup.contains(pill)) return;
-    var id = pill.getAttribute("data-defect-pill");
+    var card = e.target.closest("[data-defect-pill]");
+    if (!card || !pillGroup.contains(card)) return;
+    var id = card.getAttribute("data-defect-pill");
     setSelected(id === selectedId ? "" : id);
   });
 
