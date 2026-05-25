@@ -10,15 +10,15 @@ a one-file change to `src/llm_evals/generator.py` and `judge.py`.
 
 ## What this layer demonstrates
 
-| Pattern | Where |
-|---|---|
-| LangSmith tracing | `@traceable` decorators in `src/llm_evals/generator.py` and `src/llm_evals/judge.py`; every call shows up as a run in the LangSmith UI |
-| Golden dataset | `datasets/golden_categories.jsonl` |
-| Deterministic schema check | `tests/test_item_generation.py::test_generator_output_is_valid_item_schema_offline` |
-| LLM-as-judge | `src/llm_evals/judge.py` + `tests/test_item_generation.py::test_live_generation_meets_quality_thresholds` |
-| Pass-rate threshold gating | `PASS_RATE_THRESHOLD` and `JUDGE_SCORE_FLOOR` constants drive build pass/fail |
-| Model drift detection | Scheduled CI run on Mondays surfaces drift even without a code change |
-| Schema reuse from SUT | Eval validates against `demo_app.schemas.ItemCreate` — the same Pydantic model the SUT enforces |
+| Pattern                    | Where                                                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| LangSmith tracing          | `@traceable` decorators in `src/llm_evals/generator.py` and `src/llm_evals/judge.py`; every call shows up as a run in the LangSmith UI |
+| Golden dataset             | `datasets/golden_categories.jsonl`                                                                                                     |
+| Deterministic schema check | `tests/test_item_generation.py::test_generator_output_is_valid_item_schema_offline`                                                    |
+| LLM-as-judge               | `src/llm_evals/judge.py` + `tests/test_item_generation.py::test_live_generation_meets_quality_thresholds`                              |
+| Pass-rate threshold gating | `PASS_RATE_THRESHOLD` and `JUDGE_SCORE_FLOOR` constants drive build pass/fail                                                          |
+| Model drift detection      | Scheduled CI run on Mondays surfaces drift even without a code change                                                                  |
+| Schema reuse from SUT      | Eval validates against `demo_app.schemas.ItemCreate` — the same Pydantic model the SUT enforces                                        |
 
 ## Layout
 

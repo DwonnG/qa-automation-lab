@@ -95,16 +95,16 @@ cd ../demo-app && uv sync && uv run uvicorn demo_app.main:app --port 5050
 
 ## Run each test suite
 
-| Suite                      | Command                                                      |
-| -------------------------- | ------------------------------------------------------------ |
-| Backend unit + integration | `cd demo-app && uv run pytest`                               |
-| Frontend component         | `cd web && pnpm test`                                        |
-| API E2E                    | `cd pytest-api && uv run pytest` (requires running server)   |
-| Contract                   | `cd schemathesis && uv run pytest` (requires running server) |
-| Playwright                 | `cd playwright && pnpm test`                                 |
-| Cypress                    | `cd cypress && pnpm cypress run`                             |
-| Performance (k6)           | `k6 run perf/items_smoke.js`                                 |
-| LLM evals (offline)        | `cd llm-evals && uv run pytest -m "not live"`                |
+| Suite                      | Command                                                           |
+| -------------------------- | ----------------------------------------------------------------- |
+| Backend unit + integration | `cd demo-app && uv run pytest`                                    |
+| Frontend component         | `cd web && pnpm test`                                             |
+| API E2E                    | `cd pytest-api && uv run pytest` (requires running server)        |
+| Contract                   | `cd schemathesis && uv run pytest` (requires running server)      |
+| Playwright                 | `cd playwright && pnpm test`                                      |
+| Cypress                    | `cd cypress && pnpm cypress run`                                  |
+| Performance (k6)           | `k6 run perf/items_smoke.js`                                      |
+| LLM evals (offline)        | `cd llm-evals && uv run pytest -m "not live"`                     |
 | LLM evals (live)           | `cd llm-evals && uv run pytest -m live` (needs ANTHROPIC_API_KEY) |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup.
