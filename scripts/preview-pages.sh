@@ -58,10 +58,8 @@ if [ "$RUN_TESTS" -eq 1 ]; then
     (cd web && pnpm install --silent --frozen-lockfile >/dev/null 2>&1 || pnpm install --silent >/dev/null)
     (cd web && pnpm test:ci >/dev/null 2>&1) \
       || warn "web tests failed; the dashboard will still show whatever results were emitted"
-    log "Building web demo (MSW mode, Pages base)"
-    (cd web && VITE_BASE="${PAGES_BASE}/demo/" VITE_USE_MOCKS=true pnpm build >/dev/null)
   else
-    warn "pnpm not installed; skipping web tests and demo build"
+    warn "pnpm not installed; skipping web tests"
   fi
 fi
 
@@ -130,7 +128,6 @@ JSON
 log "Building dashboard into _site/"
 PAGES_BASE="$PAGES_BASE" node scripts/build-pages-dashboard.mjs \
   --artifacts-dir _artifacts \
-  --web-dist web/dist \
   --pages-dir pages \
   --out _site
 

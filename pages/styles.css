@@ -997,9 +997,6 @@ code {
   font-size: 0.7rem;
   padding: 0 0.25rem;
 }
-.section--compact .lab-pyramid-cap .eyebrow--tiny {
-  font-size: 0.58rem;
-}
 
 /* Status chip — used by lab pyramid bands, cross-cutting cards, and the
    per-suite detail pages (failed test rows). */
@@ -1081,20 +1078,9 @@ code {
 }
 
 .lab-pyramid-cap {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
   padding: 0 0.25rem;
   color: var(--text-tertiary);
   font-size: 0.78rem;
-}
-.lab-pyramid-cap .eyebrow--tiny {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--accent-muted);
 }
 .lab-pyramid-title {
   margin: 0;

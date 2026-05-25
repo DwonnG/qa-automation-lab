@@ -23,7 +23,6 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  PNPM_VERSION: "10.0.0"
   PAGES_BASE: /qa-automation-lab
   # Each artifact name below MUST match what ci.yml / perf.yml upload.
   CI_ARTIFACTS: |
@@ -47,26 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Install web deps
-        working-directory: web
-        run: pnpm install --frozen-lockfile || pnpm install
-
-      - name: Build web demo (MSW mode, Pages base)
-        working-directory: web
-        env:
-          VITE_BASE: ${{ env.PAGES_BASE }}/demo/
-          VITE_USE_MOCKS: "true"
-        run: pnpm build
 
       - name: Resolve CI run id to pull artifacts from
         id: resolve
@@ -178,7 +160,6 @@ jobs:
         run: |
           node scripts/build-pages-dashboard.mjs \
             --artifacts-dir _artifacts \
-            --web-dist web/dist \
             --pages-dir pages \
             --out _site
 

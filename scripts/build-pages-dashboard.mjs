@@ -4,7 +4,6 @@
 // Reads downloaded CI artifacts from --artifacts-dir, parses JUnit XML and the
 // k6 summary JSON, and emits:
 //   <out>/index.html                 Top-level dashboard
-//   <out>/demo/...                   The live React demo (already built)
 //   <out>/reports/<suite>/index.html Per-suite detail page
 //   <out>/data/dashboard.json        Machine-readable snapshot
 //   <out>/styles.css, <out>/404.html Copied from pages/
@@ -16,7 +15,6 @@
 // Usage:
 //   node scripts/build-pages-dashboard.mjs \
 //     --artifacts-dir _artifacts \
-//     --web-dist web/dist \
 //     --pages-dir pages \
 //     --out _site
 
@@ -40,7 +38,6 @@ import { fileURLToPath } from "node:url";
 const args = parseArgs(argv.slice(2));
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACTS = resolve(args["artifacts-dir"] ?? join(ROOT, "_artifacts"));
-const WEB_DIST = resolve(args["web-dist"] ?? join(ROOT, "web/dist"));
 const PAGES_DIR = resolve(args["pages-dir"] ?? join(ROOT, "pages"));
 const DEFECTS_DIR = resolve(args["defects-dir"] ?? join(ROOT, "docs/defects"));
 const DEFECT_RUNS_DIR = resolve(
@@ -157,18 +154,6 @@ async function main() {
     // index.html is generated below; skip if shipped as a placeholder.
     if (rel === "index.html") continue;
     await cp(file, join(OUT, rel), { recursive: false });
-  }
-
-  // Copy the live demo build into <out>/demo/.
-  if (existsSync(WEB_DIST)) {
-    ensureDir(join(OUT, "demo"));
-    await cp(WEB_DIST, join(OUT, "demo"), { recursive: true });
-  } else {
-    console.warn(
-      `[build-pages] web dist missing at ${WEB_DIST}; demo will be unavailable`,
-    );
-    ensureDir(join(OUT, "demo"));
-    writeFileSync(join(OUT, "demo", "index.html"), renderMissingDemo());
   }
 
   const suiteResults = SUITES.map((suite) => collectSuite(suite, ARTIFACTS));
@@ -825,15 +810,10 @@ function renderDashboard(data, suiteResults, defectsCatalog = []) {
             a <strong>full test pyramid</strong> &mdash; from pure-logic units
             up through component, integration (including k6 load),
             API (including Schemathesis contract), and UI E2E coverage &mdash;
-            against one bundled React + FastAPI
-            <a href="#sut">system under test</a>.
+            against one bundled React + FastAPI system under test.
           </p>
           <div class="hero-actions">
-            <a class="btn btn--primary" href="${PAGES_BASE}/demo/">
-              <span>Try the SUT</span>
-              <span class="btn-aside">Live &middot; PIN 000000</span>
-            </a>
-            <a class="btn btn--ghost" href="${REPO_URL}" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+            <a class="btn btn--primary" href="${REPO_URL}" target="_blank" rel="noopener noreferrer">View on GitHub</a>
             <a class="btn btn--ghost" href="${REPO_URL}/actions" target="_blank" rel="noopener noreferrer">CI runs &rarr;</a>
           </div>
           ${renderHeroMetrics(totals, ci)}
@@ -862,35 +842,6 @@ function renderDashboard(data, suiteResults, defectsCatalog = []) {
           </div>
         </section>
 
-        <section class="section" id="sut">
-          <div class="section-head">
-            <p class="eyebrow"><span class="eyebrow-num">03</span> System under test</p>
-            <h2>The app the suites target</h2>
-            <p class="section-desc">
-              Every count above came from running tests against this exact
-              React + FastAPI app. The button below opens the React half so you
-              can poke the same screens Playwright, Cypress, axe, and Vitest
-              exercise.
-            </p>
-          </div>
-          <div class="about-card">
-            <p>
-              On GitHub Pages the SPA talks to
-              <a href="https://mswjs.io/" target="_blank" rel="noopener noreferrer">MSW</a>
-              handlers that mirror the real OpenAPI contract &mdash; that's the
-              only way to keep it interactive on a static host. In CI the same
-              React build runs against the real FastAPI process, and that's
-              where the suite results above come from.
-            </p>
-            <p>
-              Sign in with PIN <code>000000</code> &mdash; the hero button at
-              the top opens the SUT in a new context. State is
-              per-browser-session and resets on refresh. To run the real stack
-              locally (single port, FastAPI serving the SPA),
-              <code>docker compose up</code> from the repo.
-            </p>
-          </div>
-        </section>
       </main>
 
       <footer class="footer">
@@ -1026,7 +977,6 @@ function renderPyramidDashboard({ tiers }) {
   return `
     <div class="lab-pyramid">
       <div class="lab-pyramid-cap">
-        <span class="eyebrow eyebrow--tiny" aria-hidden="true">Targets the SUT &darr;</span>
         <p class="lab-pyramid-title">
           ${totalTiersWithSuites} architectural tier${totalTiersWithSuites === 1 ? "" : "s"} &middot;
           ${totalSuites} suite${totalSuites === 1 ? "" : "s"}
@@ -1721,22 +1671,6 @@ function renderDetailMetrics(stats, status, passed, failedTotal) {
   `;
 }
 
-function renderMissingDemo() {
-  return baseLayout({
-    title: "Demo unavailable",
-    body: `
-      <main class="detail" id="main" style="text-align:center">
-        <p class="breadcrumb"><a href="${PAGES_BASE}/"><span aria-hidden="true">&larr;</span><span>Back to dashboard</span></a></p>
-        <header class="detail-head">
-          <p class="eyebrow"><span class="eyebrow-num">•</span> Build missing</p>
-          <h1>SUT build not published</h1>
-          <p class="lede">Re-run the Pages workflow to publish the React SUT build.</p>
-        </header>
-      </main>
-    `,
-  });
-}
-
 // --- Shared helpers --------------------------------------------------------
 
 function baseLayout({ title, body, extraMeta = "" }) {
@@ -1790,7 +1724,6 @@ function baseLayout({ title, body, extraMeta = "" }) {
         <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
         <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
         <a href="${PAGES_BASE}/#defects">Defects</a>
-        <a href="${PAGES_BASE}/#sut">SUT</a>
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
       <button
@@ -1810,7 +1743,6 @@ function baseLayout({ title, body, extraMeta = "" }) {
       <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
       <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
       <a href="${PAGES_BASE}/#defects">Defects</a>
-      <a href="${PAGES_BASE}/#sut">SUT</a>
       <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
     </div>
 

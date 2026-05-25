@@ -76,7 +76,6 @@ injected into the page's `<meta name="defect-dispatch-url">` tag:
 DEFECT_DISPATCH_URL=https://qa-automation-lab-dispatch.<you>.workers.dev \
   node scripts/build-pages-dashboard.mjs \
   --artifacts-dir _artifacts \
-  --web-dist web/dist \
   --pages-dir pages \
   --out _site
 ```
