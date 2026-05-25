@@ -33,9 +33,11 @@ gap with:
 }
 ```
 
-Only the five defect ids in
+Only the defect ids documented in
 [`docs/defects/`](../../docs/defects) are accepted; anything else is
-silently dropped before hitting GitHub.
+silently dropped before hitting GitHub. The accepted set lives in
+`KNOWN_DEFECTS` in `src/worker.js` and must be redeployed (`npx wrangler
+deploy`) whenever you add a new defect.
 
 ## One-time setup
 

@@ -5,12 +5,18 @@ import { HEALTH_URL } from "./lib/paths";
 const PORT = Number(process.env.PORT ?? 5050);
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 const IS_CI = !!process.env.CI;
+// Defect-injection runs intentionally break the SUT. Retrying tests we
+// know will keep failing wastes ~2x the wall time and pushes the job past
+// its CI timeout-minutes cap; bailing after the first handful of failures
+// is enough to prove the defect was caught and feeds the agent review.
+const HAS_DEFECTS = (process.env.DEFECTS ?? "").trim().length > 0;
 
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
   forbidOnly: IS_CI,
-  retries: IS_CI ? 2 : 0,
+  retries: HAS_DEFECTS ? 0 : IS_CI ? 2 : 0,
+  maxFailures: HAS_DEFECTS ? 5 : undefined,
   // Serial workers: the auth fixture resets the shared backend store, so parallel
   // workers race each other's data. Per-worker isolation is a future enhancement.
   workers: 1,
