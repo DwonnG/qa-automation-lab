@@ -21,9 +21,9 @@ Each defect lives in production code paths, gated by a flag, so:
 
 A defect with no flag set is a no-op — production code paths run.
 
-## Pre-seeded example runs
+## Pre-seeded example outputs
 
-The dashboard's defect panel has an **example run** link on every row
+The dashboard's defect panel has an **example output** link on every row
 that fetches a pre-baked `agent-feedback.md` + `agent-summary.json` from
 [`example-runs/example-<id>/`](example-runs/). These let the panel show
 realistic agent output before anyone clicks the live dispatch button.

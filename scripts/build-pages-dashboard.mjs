@@ -211,7 +211,7 @@ async function main() {
         cpRecursiveSync(src, dest);
       } catch (err) {
         console.warn(
-          `[build-pages] copy example run ${entry} failed: ${err.message}`,
+          `[build-pages] copy example output ${entry} failed: ${err.message}`,
         );
       }
     }
@@ -842,20 +842,25 @@ function renderDashboard(data, suiteResults, defectsCatalog = []) {
       </header>
 
       <main id="main">
-        <section class="section section--compact" id="pyramid">
-          <div class="section-head">
-            <p class="eyebrow"><span class="eyebrow-num">01</span> Coverage</p>
-            <h2>The pyramid, live</h2>
-            <p class="section-desc">
-              Five tiers, nine suites — every count comes from JUnit XML or
-              the k6 summary published by the latest CI run on <code>main</code>.
-              Tap a row for the report; ↗ jumps to source.
-            </p>
+        <section class="section section--compact section--stage" id="pyramid">
+          <div class="lab-stage">
+            <div class="lab-stage-main">
+              <div class="section-head">
+                <p class="eyebrow"><span class="eyebrow-num">01</span> Coverage</p>
+                <h2>The pyramid, live</h2>
+                <p class="section-desc">
+                  Five tiers, nine suites — every count comes from JUnit XML or
+                  the k6 summary published by the latest CI run on <code>main</code>.
+                  Tap a row for the report; ↗ jumps to source.
+                </p>
+              </div>
+              ${renderPyramidDashboard(buildTiers(suiteResults))}
+            </div>
+            <aside class="lab-stage-aside" id="defects">
+              ${renderDefectInjector(defectsCatalog)}
+            </aside>
           </div>
-          ${renderPyramidDashboard(buildTiers(suiteResults))}
         </section>
-
-        ${renderDefectsSection(defectsCatalog)}
 
         <section class="section" id="sut">
           <div class="section-head">
@@ -1278,83 +1283,72 @@ const CATEGORY_LABELS = {
   perf: "PERF",
 };
 
-function renderDefectsSection(catalog) {
+function renderDefectInjector(catalog) {
   if (catalog.length === 0) return "";
   const live = Boolean(DEFECT_DISPATCH_URL);
-  const helpText = live
-    ? "Pick one or more defects and dispatch a real CI run. The matching tier band(s) will flip when the run completes; an AI-written explanation appears below."
-    : "This deploy is read-only: <code>DEFECT_DISPATCH_URL</code> isn't configured, so the panel can't fire a workflow. Pre-seeded example runs are available below.";
-  const rows = catalog
-    .map((d) => {
-      const tier = TIER_LABELS[d.tier] || escapeHtml(d.tier || "");
-      const categoryKey = (d.category || "").toLowerCase();
-      const category = CATEGORY_LABELS[categoryKey] || "";
-      // Visible line is CSS-truncated to a single line; the full body is
-      // exposed via the row's `title` tooltip for at-a-glance hover.
-      const summary = escapeHtml(
-        (d.summary || "").split("\n")[0].slice(0, 200),
-      );
-      return `
-        <li class="defect-row" data-defect-id="${escapeAttr(d.id)}" data-tier="${escapeAttr(d.tier || "")}" data-category="${escapeAttr(categoryKey)}">
-          <label class="defect-row-toggle">
-            <input
-              type="checkbox"
-              name="defect"
-              value="${escapeAttr(d.id)}"
-              data-testid="defect-check-${escapeAttr(d.id)}"
-              ${live ? "" : "disabled"}
-            />
-            <div class="defect-row-body">
-              <div class="defect-row-head">
-                ${
-                  category
-                    ? `<span class="defect-row-cat defect-row-cat--${escapeAttr(categoryKey)}" title="${escapeAttr(category)} class of defect">${escapeHtml(category)}</span>`
-                    : ""
-                }
-                <code class="defect-row-id">${escapeHtml(d.id)}</code>
-                <span class="defect-row-tier">${escapeHtml(tier)}</span>
-                ${
-                  d.visible_in_browser
-                    ? `<span class="defect-row-flag" title="Toggle the in-browser SUT to see this defect immediately">in-browser</span>`
-                    : ""
-                }
-              </div>
-              <p class="defect-row-summary" title="${escapeAttr(d.summary || "")}">${summary}</p>
-            </div>
-          </label>
-          <div class="defect-row-actions">
-            <a class="defect-row-cta" href="${PAGES_BASE}/defect-runs/example-${escapeAttr(d.id)}/" data-defect-example="${escapeAttr(d.id)}">Example run</a>
-            <a class="defect-row-link" href="${REPO_URL}/blob/main/docs/defects/${escapeAttr(d.id)}.md" target="_blank" rel="noopener noreferrer" title="Read the full defect spec">spec&nbsp;↗</a>
-          </div>
-        </li>
-      `;
-    })
-    .join("\n");
+
+  // Order options top-of-pyramid down so the dropdown's flow mirrors
+  // the pyramid's silhouette on the left.
+  const tierOrder = ["ui", "api", "integration", "component", "unit"];
+  const sorted = [...catalog].sort((a, b) => {
+    const ai = tierOrder.indexOf(a.tier);
+    const bi = tierOrder.indexOf(b.tier);
+    if (ai !== bi) return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    return (a.title || a.id).localeCompare(b.title || b.id);
+  });
+
+  const options = sorted
+    .map(
+      (d) =>
+        `<option value="${escapeAttr(d.id)}">${escapeHtml(d.title || d.id)}</option>`,
+    )
+    .join("");
+
+  // Inline catalog JSON so the dropdown handler can populate the detail
+  // card and resolve tier/spec links without a second HTTP roundtrip.
+  const catalogJson = JSON.stringify(
+    Object.fromEntries(
+      catalog.map((d) => {
+        const categoryKey = (d.category || "").toLowerCase();
+        return [
+          d.id,
+          {
+            id: d.id,
+            title: d.title || d.id,
+            tier: d.tier || "",
+            tierLabel: TIER_LABELS[d.tier] || d.tier || "",
+            category: categoryKey,
+            categoryLabel: CATEGORY_LABELS[categoryKey] || "",
+            summary: d.summary || "",
+            visibleInBrowser: Boolean(d.visible_in_browser),
+            specUrl: `${REPO_URL}/blob/main/docs/defects/${d.id}.md`,
+            exampleUrl: `${PAGES_BASE}/defect-runs/example-${d.id}/`,
+          },
+        ];
+      }),
+    ),
+  );
 
   return `
-    <section class="section section--compact" id="defects">
-      <div class="section-head">
-        <p class="eyebrow"><span class="eyebrow-num">02</span> Defect injection</p>
-        <h2>Flip a bug, watch the pyramid catch it</h2>
-        <p class="section-desc">${helpText}</p>
-      </div>
-      <div class="defect-panel" data-live="${live ? "true" : "false"}">
-        <ol class="defect-list">${rows}</ol>
-        <div class="defect-panel-footer">
-          <button
-            type="button"
-            class="btn btn--ghost defect-run-btn"
-            data-testid="defect-run-btn"
-            data-default-label="${live ? "Select at least one defect" : "Configure DEFECT_DISPATCH_URL to enable"}"
-            ${live ? "disabled" : "disabled"}
-          >
-            ${live ? "Select at least one defect" : "Configure DEFECT_DISPATCH_URL to enable"}
-          </button>
-          <p class="defect-panel-status" data-defect-status role="status" aria-live="polite"></p>
-        </div>
-        <div class="defect-panel-result" hidden data-defect-result></div>
-      </div>
-    </section>
+    <div class="section-head section-head--minor">
+      <p class="eyebrow"><span class="eyebrow-num">02</span> Defect injection</p>
+      <h3>Flip a bug, watch the pyramid catch it</h3>
+    </div>
+    <div class="defect-injector" data-live="${live ? "true" : "false"}">
+      <script type="application/json" data-defect-catalog>${catalogJson}</script>
+      <label class="defect-injector-field">
+        <span class="defect-injector-field-label">Inject defect</span>
+        <select class="defect-injector-select" data-defect-select aria-label="Choose a defect to inject">
+          <option value="">Choose a defect…</option>
+          ${options}
+        </select>
+      </label>
+
+      <div class="defect-injector-detail" hidden data-defect-detail aria-live="polite"></div>
+
+      <p class="defect-injector-status" data-defect-status role="status" aria-live="polite"></p>
+      <div class="defect-injector-result" hidden data-defect-result></div>
+    </div>
   `;
 }
 

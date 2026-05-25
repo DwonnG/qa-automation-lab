@@ -1,12 +1,10 @@
 ---
 id: slow_query
-title: List endpoint sleeps 400ms per request
+title: Item list is much slower than the SLO
 tier: integration
 category: perf
 summary: |
-  GET /api/items adds a 400ms sleep at the top of the handler when this
-  flag is on, breaking the k6 p95 SLO (200ms) without breaking any
-  functional test.
+  Listing items takes 400ms longer than the performance SLO allows.
 code_path: demo-app/src/demo_app/routes.py:list_items
 caught_by:
   - suite: perf

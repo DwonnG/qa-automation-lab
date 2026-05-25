@@ -8,7 +8,7 @@ enabled.
 
 [`scripts/build-pages-dashboard.mjs`](../../../scripts/build-pages-dashboard.mjs)
 copies this whole tree into `_site/defect-runs/`, and the dashboard's
-"example run" link on every defect row fetches the matching
+"example output" link on every defect row fetches the matching
 `agent-feedback.md` inline.
 
 These seeds exist so the panel has something to show before anyone

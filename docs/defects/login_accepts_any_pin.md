@@ -4,9 +4,7 @@ title: Login accepts any 6-digit PIN
 tier: ui
 category: auth
 summary: |
-  The auth layer issues a session token for any well-formed 6-digit PIN
-  instead of checking it against the demo PIN with a constant-time
-  comparison.
+  Any 6-digit PIN logs you in, even the wrong one.
 code_path: demo-app/src/demo_app/auth.py:issue_token
 caught_by:
   - suite: backend

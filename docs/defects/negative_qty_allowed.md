@@ -1,11 +1,10 @@
 ---
 id: negative_qty_allowed
-title: Item create accepts negative quantity
+title: Items can be created with negative quantities
 tier: api
 category: data
 summary: |
-  POST /api/items bypasses Pydantic's `Ge(0)` validator on quantity, allowing
-  the store to persist a negative inventory count.
+  The API saves items with negative quantities instead of rejecting them.
 code_path: demo-app/src/demo_app/routes.py:create_item
 caught_by:
   - suite: backend

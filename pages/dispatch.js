@@ -1,10 +1,11 @@
-// Defect-injection panel controller.
+// Defect-injection controller.
 //
-// Reads <meta name="defect-dispatch-url"> — empty = read-only mode.
-// When live: POST /dispatch to the worker, poll /run/<id> until done,
-// then fetch the agent bundle. "Example run" links short-circuit to
-// pre-seeded /defect-runs/example-<id>/ artifacts so the panel is
-// useful even without a worker.
+// Pyramid + injector live side by side. Selecting a defect from the
+// dropdown immediately pulses the affected tier band above and reveals
+// a detail card with Example/Run-live actions. "Example output" loads
+// the pre-seeded markdown from /defect-runs/example-<id>/ (always
+// available). "Run live" requires <meta name="defect-dispatch-url">
+// and POSTs to the Cloudflare Worker for a real workflow_dispatch.
 
 (function () {
   "use strict";
@@ -17,76 +18,37 @@
   var DISPATCH_URL = docMeta("defect-dispatch-url");
   var RUNS_BASE = docMeta("defect-runs-base") || "./defect-runs/";
 
-  var panel = document.querySelector(".defect-panel");
+  var panel = document.querySelector(".defect-injector");
   if (!panel) return;
+
+  var select = panel.querySelector("[data-defect-select]");
+  var detailEl = panel.querySelector("[data-defect-detail]");
   var statusEl = panel.querySelector("[data-defect-status]");
   var resultEl = panel.querySelector("[data-defect-result]");
-  var runBtn = panel.querySelector(".defect-run-btn");
   var live = panel.getAttribute("data-live") === "true";
-  var runBtnDefaultLabel =
-    runBtn.getAttribute("data-default-label") || runBtn.textContent.trim();
+
+  var catalogNode = panel.querySelector("[data-defect-catalog]");
+  var catalog = {};
+  try {
+    catalog = JSON.parse(catalogNode.textContent || "{}");
+  } catch (_) {
+    catalog = {};
+  }
 
   // ---------- helpers ------------------------------------------------------
 
   function setStatus(msg, klass) {
     statusEl.textContent = msg || "";
     statusEl.className =
-      "defect-panel-status" + (klass ? " defect-panel-status--" + klass : "");
+      "defect-injector-status" +
+      (klass ? " defect-injector-status--" + klass : "");
   }
 
-  function selectedDefects() {
-    var boxes = panel.querySelectorAll(
-      'input[type="checkbox"][name="defect"]:checked',
-    );
-    return Array.prototype.map.call(boxes, function (b) {
-      return b.value;
-    });
-  }
-
-  // Toggles the run button between idle (ghost, no count) and armed
-  // (primary, "Run with N defect(s)"). Hooked to the panel's change event.
-  function syncRunButton() {
-    if (!live) return;
-    var count = selectedDefects().length;
-    if (count === 0) {
-      runBtn.disabled = true;
-      runBtn.textContent = runBtnDefaultLabel;
-      runBtn.classList.remove("btn--primary");
-      runBtn.classList.add("btn--ghost");
-    } else {
-      runBtn.disabled = false;
-      runBtn.textContent =
-        "Run with " + count + " defect" + (count === 1 ? "" : "s");
-      runBtn.classList.remove("btn--ghost");
-      runBtn.classList.add("btn--primary");
-    }
-  }
-
-  function affectedTiers() {
-    // Mirrors the workflow's defect-to-tier map.
-    var rows = panel.querySelectorAll(
-      '.defect-row input[type="checkbox"]:checked',
-    );
-    var tiers = {};
-    Array.prototype.forEach.call(rows, function (input) {
-      var row = input.closest(".defect-row");
-      if (!row) return;
-      var tier = row.getAttribute("data-tier");
-      if (tier) tiers[tier] = true;
-    });
-    return Object.keys(tiers);
-  }
-
-  function markTiersPending(tiers) {
-    document.querySelectorAll(".lab-tier").forEach(function (el) {
-      el.classList.remove("lab-tier--defect-pending");
-    });
-    tiers.forEach(function (tier) {
-      var bands = document.querySelectorAll(".lab-tier--" + tier);
-      bands.forEach(function (el) {
-        el.classList.add("lab-tier--defect-pending");
-      });
-    });
+  function escapeHtml(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   function clearTierMarks() {
@@ -96,19 +58,25 @@
     });
   }
 
-  function markTiersFailed(tiers) {
-    tiers.forEach(function (tier) {
-      var bands = document.querySelectorAll(".lab-tier--" + tier);
-      bands.forEach(function (el) {
-        el.classList.remove("lab-tier--defect-pending");
-        el.classList.add("lab-tier--defect-failed");
-      });
+  function markTierPending(tierKey) {
+    clearTierMarks();
+    if (!tierKey) return;
+    document.querySelectorAll(".lab-tier--" + tierKey).forEach(function (el) {
+      el.classList.add("lab-tier--defect-pending");
     });
   }
 
-  // Minimal markdown → HTML. The agent prompt restricts output to
-  // headings, lists, fenced code, inline backticks, and bold, so a 30KB
-  // marked.js dep isn't worth the bytes.
+  function markTierFailed(tierKey) {
+    if (!tierKey) return;
+    document.querySelectorAll(".lab-tier--" + tierKey).forEach(function (el) {
+      el.classList.remove("lab-tier--defect-pending");
+      el.classList.add("lab-tier--defect-failed");
+    });
+  }
+
+  // Minimal markdown → HTML. Agent prompt restricts output to headings,
+  // lists, fenced/inline code, and bold — a 30KB marked.js dep isn't
+  // worth the bytes for that surface.
   function renderMarkdown(md) {
     if (!md) return "";
     var safe = String(md)
@@ -157,11 +125,16 @@
   function dismissResult() {
     resultEl.hidden = true;
     resultEl.innerHTML = "";
-    clearTierMarks();
-    setStatus("");
   }
 
-  // Close-button delegation + Escape key both collapse an expanded result.
+  function resultCloseButton() {
+    return (
+      '<button type="button" class="defect-result-close" ' +
+      'data-defect-result-close aria-label="Close result panel" ' +
+      'title="Close (Esc)">×</button>'
+    );
+  }
+
   resultEl.addEventListener("click", function (e) {
     if (e.target.closest("[data-defect-result-close]")) {
       e.preventDefault();
@@ -174,37 +147,104 @@
     }
   });
 
-  function resultCloseButton() {
-    return (
-      '<button type="button" class="defect-result-close" ' +
-      'data-defect-result-close aria-label="Close result panel" ' +
-      'title="Close (Esc)">×</button>'
-    );
+  // ---------- detail card rendering ---------------------------------------
+
+  function renderDetail(id) {
+    var d = catalog[id];
+    if (!d) {
+      detailEl.hidden = true;
+      detailEl.innerHTML = "";
+      return;
+    }
+
+    var category = d.categoryLabel
+      ? '<span class="defect-row-cat defect-row-cat--' +
+        escapeHtml(d.category) +
+        '">' +
+        escapeHtml(d.categoryLabel) +
+        "</span>"
+      : "";
+    var tier = d.tierLabel
+      ? '<span class="defect-injector-tier">' +
+        escapeHtml(d.tierLabel) +
+        "</span>"
+      : "";
+    var inBrowser = d.visibleInBrowser
+      ? '<span class="defect-row-flag" title="Toggle the in-browser SUT to see this defect immediately">in-browser</span>'
+      : "";
+
+    var runBtn = live
+      ? '<button type="button" class="btn btn--primary defect-injector-run" data-defect-run="' +
+        escapeHtml(id) +
+        '">Run live &#9654;</button>'
+      : '<button type="button" class="btn btn--primary" disabled title="Live runs are disabled in this deploy (DEFECT_DISPATCH_URL not configured)">Run live &#9654;</button>';
+
+    detailEl.innerHTML =
+      '<div class="defect-injector-detail-head">' +
+      category +
+      tier +
+      inBrowser +
+      "</div>" +
+      '<h4 class="defect-injector-title">' +
+      escapeHtml(d.title || id) +
+      "</h4>" +
+      '<p class="defect-injector-summary">' +
+      escapeHtml(d.summary || "") +
+      "</p>" +
+      '<div class="defect-injector-actions">' +
+      '<a class="btn btn--ghost defect-injector-example" href="' +
+      escapeHtml(d.exampleUrl) +
+      '" data-defect-example="' +
+      escapeHtml(id) +
+      '" title="Show the pre-seeded AI failure review (no CI run triggered)">Show example output</a>' +
+      runBtn +
+      '<a class="defect-injector-spec" href="' +
+      escapeHtml(d.specUrl) +
+      '" target="_blank" rel="noopener noreferrer">spec&nbsp;&#8599;</a>' +
+      "</div>";
+    detailEl.hidden = false;
   }
 
-  // ---------- example-run handler -----------------------------------------
+  // ---------- dropdown change handler -------------------------------------
+
+  select.addEventListener("change", function () {
+    var id = select.value;
+    dismissResult();
+    setStatus("");
+    if (!id) {
+      clearTierMarks();
+      detailEl.hidden = true;
+      detailEl.innerHTML = "";
+      return;
+    }
+    var d = catalog[id];
+    if (d && d.tier) markTierPending(d.tier);
+    renderDetail(id);
+  });
+
+  // ---------- example-output handler --------------------------------------
 
   panel.addEventListener("click", function (e) {
     var link = e.target.closest("[data-defect-example]");
     if (!link) return;
     e.preventDefault();
     var id = link.getAttribute("data-defect-example");
+    var d = catalog[id];
+    var label = (d && d.title) || id;
     var base = RUNS_BASE + "example-" + id + "/";
-    setStatus("Loading example run for " + id + "…", "info");
+    setStatus("Loading example output for " + label + "…", "info");
     fetch(base + "agent-feedback.md", { cache: "no-cache" })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.text();
       })
       .then(function (md) {
-        clearTierMarks();
-        var row = link.closest(".defect-row");
-        var tier = row ? row.getAttribute("data-tier") : null;
-        if (tier) markTiersFailed([tier]);
+        if (d && d.tier) markTierFailed(d.tier);
+        var title = (d && d.title) || id;
         showResult(
           '<header class="defect-result-head">' +
-            '<span class="defect-result-tag">Example run · ' +
-            id +
+            '<span class="defect-result-tag">Example output · ' +
+            escapeHtml(title) +
             "</span>" +
             '<span class="defect-result-spacer"></span>' +
             resultCloseButton() +
@@ -213,12 +253,12 @@
             renderMarkdown(md) +
             "</div>",
         );
-        setStatus("Showing pre-seeded example run.", "ok");
+        setStatus("Showing pre-seeded example output.", "ok");
       })
       .catch(function (err) {
         setStatus(
           "No example available yet for " +
-            id +
+            label +
             " (" +
             err.message +
             "). Pre-seed under docs/defects/example-runs/.",
@@ -231,32 +271,21 @@
 
   if (!live || !DISPATCH_URL) return;
 
-  panel.addEventListener("change", function (e) {
-    if (e.target && e.target.matches('input[type="checkbox"][name="defect"]')) {
-      syncRunButton();
-    }
-  });
-  syncRunButton();
-
-  runBtn.addEventListener("click", function () {
-    var defects = selectedDefects();
-    if (defects.length === 0) {
-      setStatus("Pick at least one defect first.", "err");
-      return;
-    }
-    runBtn.disabled = true;
-    resultEl.hidden = true;
-    var tiers = affectedTiers();
-    markTiersPending(tiers);
-    setStatus("Dispatching workflow…", "info");
+  panel.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-defect-run]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-defect-run");
+    var d = catalog[id];
+    var label = (d && d.title) || id;
+    btn.disabled = true;
+    dismissResult();
+    if (d && d.tier) markTierPending(d.tier);
+    setStatus("Dispatching workflow for " + label + "…", "info");
 
     fetch(DISPATCH_URL + "/dispatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        defects: defects.join(","),
-        requestor: "dashboard",
-      }),
+      body: JSON.stringify({ defects: id, requestor: "dashboard" }),
     })
       .then(function (r) {
         if (!r.ok) {
@@ -270,16 +299,16 @@
         var runId = data.run_id;
         if (!runId) throw new Error("worker did not return a run_id");
         setStatus("Run #" + runId + " queued. Polling…", "info");
-        pollRun(runId, tiers);
+        pollRun(runId, id, btn);
       })
       .catch(function (err) {
-        syncRunButton();
+        btn.disabled = false;
         clearTierMarks();
         setStatus("Dispatch failed: " + err.message, "err");
       });
   });
 
-  function pollRun(runId, tiers) {
+  function pollRun(runId, defectId, btn) {
     var attempts = 0;
     var maxAttempts = 120; // 10 minutes at 5s
     var poll = function () {
@@ -306,24 +335,24 @@
             if (attempts < maxAttempts) {
               setTimeout(poll, 5000);
             } else {
+              btn.disabled = false;
               clearTierMarks();
-              syncRunButton();
               setStatus("Timed out waiting for run #" + runId + ".", "err");
             }
             return;
           }
-          renderRunResult(runId, tiers, data);
+          renderRunResult(runId, defectId, btn, data);
         })
         .catch(function (err) {
+          btn.disabled = false;
           clearTierMarks();
-          syncRunButton();
           setStatus("Poll failed: " + err.message, "err");
         });
     };
     poll();
   }
 
-  function renderRunResult(runId, tiers, data) {
+  function renderRunResult(runId, defectId, btn, data) {
     var base = (data.bundle_url || RUNS_BASE + runId + "/").replace(
       /\/?$/,
       "/",
@@ -339,10 +368,12 @@
       .then(function (parts) {
         var md = parts[0] || "";
         var summary = parts[1];
-        syncRunButton();
-        clearTierMarks();
+        btn.disabled = false;
+        var d = catalog[defectId];
         if (summary && summary.totals && summary.totals.failed > 0) {
-          markTiersFailed(tiers);
+          if (d && d.tier) markTierFailed(d.tier);
+        } else {
+          clearTierMarks();
         }
         setStatus(
           "Run #" +
@@ -371,7 +402,7 @@
         );
       })
       .catch(function (err) {
-        syncRunButton();
+        btn.disabled = false;
         setStatus("Loaded run but failed to render: " + err.message, "err");
       });
   }

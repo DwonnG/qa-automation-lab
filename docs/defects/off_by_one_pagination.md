@@ -1,12 +1,10 @@
 ---
 id: off_by_one_pagination
-title: List endpoint drops the last item on every page
+title: Last item on every page goes missing
 tier: integration
 category: data
 summary: |
-  GET /api/items supports `page` and `page_size` query params. The slice math
-  in the defect path uses `items[start:end - 1]`, silently truncating the
-  last row of every page.
+  Each page silently drops its last item, so users never see the full list.
 code_path: demo-app/src/demo_app/routes.py:list_items
 caught_by:
   - suite: backend

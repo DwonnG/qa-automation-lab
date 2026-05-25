@@ -1,11 +1,10 @@
 ---
 id: delete_skips_auth
-title: DELETE /api/items/{id} bypasses bearer auth
+title: Delete works without authentication
 tier: api
 category: security
 summary: |
-  The DELETE handler removes its `Depends(require_bearer)` dependency when
-  this flag is on, allowing any unauthenticated client to remove items.
+  Anyone can delete items without sending an auth token.
 code_path: demo-app/src/demo_app/routes.py:delete_item
 caught_by:
   - suite: api-e2e
