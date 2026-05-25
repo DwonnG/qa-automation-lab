@@ -154,6 +154,14 @@
     resultEl.hidden = true;
     resultEl.innerHTML = "";
     setRunning(false);
+    if (selectedId) {
+      var d = catalog[selectedId];
+      if (d && d.tier) {
+        markTierPending(d.tier);
+        return;
+      }
+    }
+    clearTierMarks();
   }
 
   function setRunning(on) {
@@ -169,6 +177,15 @@
         c.removeAttribute("tabindex");
       }
     });
+  }
+
+  function setRunBtnRunning(btn, on) {
+    if (!btn) return;
+    btn.disabled = !!on;
+    btn.classList.toggle("is-running", !!on);
+    btn.innerHTML = on
+      ? '<span class="defect-injector-run-spinner" aria-hidden="true"></span>Running\u2026'
+      : "Run live &#9654;";
   }
 
   function resultCloseButton() {
@@ -348,7 +365,7 @@
     var id = btn.getAttribute("data-defect-run");
     var d = catalog[id];
     var label = (d && d.title) || id;
-    btn.disabled = true;
+    setRunBtnRunning(btn, true);
     dismissResult();
     setRunning(true);
     if (d && d.tier) markTierPending(d.tier);
@@ -374,7 +391,7 @@
         pollRun(runId, id, btn);
       })
       .catch(function (err) {
-        btn.disabled = false;
+        setRunBtnRunning(btn, false);
         setRunning(false);
         clearTierMarks();
         setStatus("Dispatch failed: " + err.message, "err");
@@ -404,7 +421,7 @@
             if (attempts < maxAttempts) {
               setTimeout(poll, 5000);
             } else {
-              btn.disabled = false;
+              setRunBtnRunning(btn, false);
               setRunning(false);
               clearTierMarks();
               setStatus("Timed out waiting for tests to finish.", "err");
@@ -414,7 +431,7 @@
           renderRunResult(runId, defectId, btn, data);
         })
         .catch(function (err) {
-          btn.disabled = false;
+          setRunBtnRunning(btn, false);
           setRunning(false);
           clearTierMarks();
           setStatus("Poll failed: " + err.message, "err");
@@ -439,7 +456,7 @@
       .then(function (parts) {
         var md = parts[0] || "";
         var summary = parts[1];
-        btn.disabled = false;
+        setRunBtnRunning(btn, false);
         setRunning(false);
         var d = catalog[defectId];
         var failed =
@@ -500,7 +517,7 @@
         );
       })
       .catch(function (err) {
-        btn.disabled = false;
+        setRunBtnRunning(btn, false);
         setRunning(false);
         setStatus("Loaded run but failed to render: " + err.message, "err");
       });

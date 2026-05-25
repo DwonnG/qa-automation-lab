@@ -724,6 +724,39 @@ code {
 .btn:active {
   transform: scale(0.98);
 }
+.btn[disabled],
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  filter: saturate(0.55);
+  box-shadow: none;
+}
+.btn[disabled]:hover,
+.btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+.defect-injector-run-spinner {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.45em;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: defect-run-spin 0.8s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes defect-run-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .defect-injector-run-spinner {
+    animation: none;
+  }
+}
 .btn--primary {
   color: #fff;
   background: var(--accent-fill);
