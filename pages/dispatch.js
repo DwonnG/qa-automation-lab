@@ -465,9 +465,15 @@
 
         // Drive both the tier color AND the status pill from the same
         // source: the per-test failure count from agent-summary.json.
-        // "Conclusion: success" on the GitHub run is misleading here
-        // because suite jobs run with continue-on-error so the agent can
-        // still review — only the agent job decides workflow conclusion.
+        // "no-failures", "dry-run", and "fallback:*" are all benign — the
+        // review markdown still rendered and is in the panel below; only
+        // a truly missing/erroring review should claim "no review."
+        var benignAgentStatuses = ["ok", "no-failures", "dry-run"];
+        var agentHardError =
+          agentStatus &&
+          benignAgentStatuses.indexOf(agentStatus) === -1 &&
+          agentStatus.indexOf("fallback:") !== 0;
+
         var msg;
         var klass;
         if (failed === null) {
@@ -475,7 +481,7 @@
             "Run complete. Conclusion: " + (data.conclusion || "unknown") + ".";
           klass = data.conclusion === "success" ? "ok" : "err";
           clearTierMarks();
-        } else if (agentStatus && agentStatus !== "ok") {
+        } else if (agentHardError) {
           msg = "Agent error (" + agentStatus + "). No review available.";
           klass = "err";
           clearTierMarks();
@@ -484,12 +490,16 @@
           klass = "err";
           if (d && d.tier) markTierFailed(d.tier, failed);
         } else if (data.conclusion && data.conclusion !== "success") {
+          // Workflow conclusion is failure but no JUnit/k6 failures were
+          // captured — surface the build failure honestly instead of
+          // claiming success. The tier still flips red because the build
+          // itself "caught" something even if assertions didn't.
           msg =
-            "Workflow failed (" +
+            "Build failed (" +
             data.conclusion +
-            ") before tests could verdict the defect.";
+            ") — no test failures captured. Open the run log.";
           klass = "err";
-          clearTierMarks();
+          if (d && d.tier) markTierFailed(d.tier, 0);
         } else {
           msg = "Defect escaped — no tests caught it.";
           klass = "warn";

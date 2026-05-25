@@ -62,14 +62,25 @@ async function findJunitFiles(root) {
 }
 
 async function readK6Summary(root) {
-  const candidate = join(root, "defect-run-perf", "summary.json");
-  if (!existsSync(candidate)) return null;
-  try {
-    const raw = await readFile(candidate, "utf8");
-    return { path: candidate, summary: JSON.parse(raw) };
-  } catch (err) {
-    return { path: candidate, error: err.message };
+  // actions/download-artifact@v8 places multi-artifact downloads under
+  // `<root>/<artifact-name>/...`, but when only one artifact matches the
+  // pattern (e.g. a slow_query run that only triggers `perf`) it flattens
+  // the contents to `<root>/`. Check both layouts so the agent doesn't
+  // silently miss the k6 thresholds_passed signal.
+  const candidates = [
+    join(root, "defect-run-perf", "summary.json"),
+    join(root, "summary.json"),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const raw = await readFile(candidate, "utf8");
+      return { path: candidate, summary: JSON.parse(raw) };
+    } catch (err) {
+      return { path: candidate, error: err.message };
+    }
   }
+  return null;
 }
 
 // --- JUnit parsing --------------------------------------------------------
