@@ -1,27 +1,15 @@
 #!/usr/bin/env node
-// scripts/agent-review.mjs
+// Reads every defect-run-* artifact under BUNDLE_DIR, extracts failures
+// from JUnit XML + k6 summary, asks GitHub Models for a post-mortem,
+// and writes agent-feedback.md + agent-summary.json. Falls back to a
+// rule-based summary if the model call fails.
 //
-// Reads all defect-run-* artifacts the workflow downloaded into a single
-// bundle directory, extracts the failed test cases from every JUnit XML
-// and the k6 summary, hands the context to GitHub Models (free LLM
-// inference via GITHUB_TOKEN with `models: read`), and emits
-// agent-feedback.md alongside the artifacts.
-//
-// Inputs (env):
-//   GITHUB_TOKEN       provides auth to the GitHub Models endpoint
-//   DEFECTS_INPUT      CSV of defect ids active for this run
-//   BUNDLE_DIR         path to artifact-download root (default _bundle)
-//   AGENT_MODEL        override model slug (default openai/gpt-4o-mini)
-//   AGENT_DRY_RUN      when "true", skip the network call and write a
-//                      stub feedback file (useful for local testing)
-//
-// Output:
-//   <BUNDLE_DIR>/agent-feedback.md
-//   <BUNDLE_DIR>/agent-summary.json  (machine-readable)
-//
-// The script is intentionally network-tolerant: if GitHub Models is
-// unavailable or returns an error, it still emits a useful markdown
-// summary built from the JUnit data alone, prefixed with a notice.
+// Env:
+//   GITHUB_TOKEN   auth for the GitHub Models endpoint
+//   DEFECTS_INPUT  CSV of active defect ids
+//   BUNDLE_DIR     artifact-download root (default _bundle)
+//   AGENT_MODEL    model slug (default openai/gpt-4o-mini)
+//   AGENT_DRY_RUN  "true" skips the network call
 
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -74,7 +62,6 @@ async function findJunitFiles(root) {
 }
 
 async function readK6Summary(root) {
-  // perf artifact uploads summary.json at the bundle subdir root.
   const candidate = join(root, "defect-run-perf", "summary.json");
   if (!existsSync(candidate)) return null;
   try {
@@ -86,17 +73,14 @@ async function readK6Summary(root) {
 }
 
 // --- JUnit parsing --------------------------------------------------------
-//
-// Deliberately string-based rather than pulling in xml2js / fast-xml-parser
-// to keep the workflow free of extra installs. JUnit XML produced by pytest,
-// vitest, playwright and mocha-junit-reporter all use the same minimal
-// shape we care about.
+// Hand-rolled to avoid adding xml2js/fast-xml-parser to the workflow.
+// pytest, vitest, playwright, and mocha-junit-reporter all emit the
+// subset we care about.
 
 function parseJunit(xml) {
   const cases = [];
-  // matches <testcase ... />  OR  <testcase ...>(body)</testcase>
-  // Non-greedy attrs so self-closing variants don't swallow the trailing
-  // slash before the alternation gets to try `\/>`.
+  // <testcase .../>  OR  <testcase ...>(body)</testcase>
+  // Non-greedy attrs so self-closing tags don't swallow the trailing slash.
   const caseRe = /<testcase\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/testcase>)/g;
   let m;
   while ((m = caseRe.exec(xml)) !== null) {
@@ -277,8 +261,7 @@ async function main() {
     if (cases.length === 0) continue;
     totals.suiteCount += 1;
     const suite = basename(file).replace(/\.xml$/, "");
-    // Better suite name: parent dir under _bundle gives the artifact label
-    // (e.g. defect-run-backend, defect-run-playwright). Strip the prefix.
+    // Prefer the artifact dir name (defect-run-backend → "backend").
     const parts = file.split("/");
     const artifactDir = parts.find((p) => p.startsWith("defect-run-"));
     const suiteLabel = artifactDir
@@ -292,8 +275,8 @@ async function main() {
     }
   }
 
-  // k6 doesn't emit JUnit; if thresholds failed, synthesize a failure
-  // so the agent (and the dashboard) see the perf tier as red.
+  // k6 has no JUnit; synthesize a failure when thresholds fail so the
+  // agent + dashboard see the perf tier go red.
   if (perf?.summary && perf.summary.thresholds_passed === false) {
     failures.push({
       suite: "perf",
@@ -348,7 +331,6 @@ async function main() {
   const feedbackPath = join(BUNDLE_DIR, "agent-feedback.md");
   await writeFile(feedbackPath, header + agentBody + "\n");
 
-  // Machine-readable summary the dashboard can consume directly.
   const summary = {
     defects: DEFECT_IDS,
     totals,

@@ -1,11 +1,5 @@
-// Floating toggle panel rendered above the SUT on the Pages demo build.
-// Visitors flip intentional defects on/off, sessionStorage persists the
-// choice for the tab, and MSW handlers branch immediately on the next
-// request — no reload required.
-//
-// Only mounts when VITE_USE_MOCKS=true (same gate as DashboardLink) since
-// the toggles only affect the MSW-backed SUT. The real FastAPI backend
-// reads its own DEFECTS env var.
+// Floating toggle panel for the MSW-backed SUT. Only mounts when
+// VITE_USE_MOCKS=true; the real backend reads its own DEFECTS env var.
 
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,7 +26,7 @@ export function DefectsPanel() {
   );
   const queryClient = useQueryClient();
 
-  // Re-sync if another tab in the same session writes the storage key.
+  // Re-sync on cross-tab storage writes.
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === "qa-automation-lab.defects") {
@@ -47,9 +41,8 @@ export function DefectsPanel() {
     (next: Set<DefectId>) => {
       setActive(next);
       setDefects(Array.from(next));
-      // Invalidate cached items so the next render goes back through MSW
-      // with the new flag state. Without this, a freshly-toggled defect
-      // wouldn't visibly affect the page until the visitor navigated.
+      // Force the next render through MSW so a freshly-toggled defect
+      // shows on the current page without navigation.
       void queryClient.invalidateQueries({ queryKey: ["items"] });
     },
     [queryClient],

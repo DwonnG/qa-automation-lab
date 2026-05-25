@@ -74,10 +74,8 @@ def _build_http_exception_handler(spa_enabled: bool):
 class StrictQueryParamsMiddleware(BaseHTTPMiddleware):
     """Reject undocumented query parameters on ``/api/*`` routes.
 
-    FastAPI's default behavior is to silently ignore unknown query
-    parameters, which violates the implicit "object with unexpected
-    properties" contract Schemathesis derives from the OpenAPI spec.
-    Rejecting them surfaces typos early and keeps the contract tight.
+    FastAPI ignores unknown query params by default; Schemathesis treats that
+    as a contract violation.
     """
 
     def __init__(self, app, allowed_by_path: dict[tuple[str, str], frozenset[str]]):
@@ -109,7 +107,6 @@ class StrictQueryParamsMiddleware(BaseHTTPMiddleware):
 
 
 def _allowed_query_params(app: FastAPI) -> dict[tuple[str, str], frozenset[str]]:
-    """Snapshot per-route allowed query param names from the FastAPI router."""
     from fastapi.routing import APIRoute
 
     allowed: dict[tuple[str, str], frozenset[str]] = {}

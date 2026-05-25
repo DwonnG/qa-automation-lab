@@ -94,24 +94,22 @@ def list_items(
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> list[ItemRead]:
     if defects.enabled("slow_query"):
-        # Block the event loop for 400ms; k6 p95 SLO (200ms) cannot survive.
-        # See docs/defects/slow_query.md.
+        # 400ms blocks the event loop and breaks the k6 p95<200ms SLO.
+        # docs/defects/slow_query.md
         time.sleep(0.4)
     items = store.list()
     start = (page - 1) * page_size
     end = start + page_size
     page_items = items[start:end]
     if defects.enabled("off_by_one_pagination") and page_items:
-        # Drop the last row of every page; classic off-by-one in pagination
-        # math. See docs/defects/off_by_one_pagination.md.
+        # docs/defects/off_by_one_pagination.md
         page_items = page_items[:-1]
     return [ItemRead(id=i.id, name=i.name, quantity=i.quantity) for i in page_items]
 
 
 def _create_with_raw_quantity(raw: dict, store: ItemStore) -> ItemRead:
-    # Defect path: skip the ItemCreate Pydantic body model entirely so the
-    # Ge(0) constraint on quantity is never applied. The store accepts any
-    # int. See docs/defects/negative_qty_allowed.md.
+    # Bypasses ItemCreate so Pydantic's Ge(0) never runs.
+    # docs/defects/negative_qty_allowed.md
     if not isinstance(raw, dict) or "name" not in raw or "quantity" not in raw:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -129,18 +127,15 @@ def _create_with_raw_quantity(raw: dict, store: ItemStore) -> ItemRead:
     return ItemRead(id=item.id, name=item.name, quantity=item.quantity)
 
 
+# Body is read via Request.json() (not a `body: ItemCreate` parameter) so the
+# negative_qty_allowed defect can bypass Pydantic's Ge(0). That also strips the
+# auto-generated requestBody + 422 response, so we republish them here to keep
+# the OpenAPI spec honest for Schemathesis.
 @router.post(
     ITEMS_PATH,
     response_model=ItemRead,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_bearer)],
-    # We intentionally consume the body manually (via Request.json()) so the
-    # `negative_qty_allowed` defect can bypass Pydantic's Ge(0) validator.
-    # FastAPI would normally synthesize the requestBody schema + 422 response
-    # from a `body: ItemCreate` parameter; with that gone we must document
-    # the same contract by hand so the OpenAPI spec keeps matching reality
-    # (Schemathesis fuzzes against the spec and reports drift as a Server
-    # Error otherwise).
     responses={
         **_AUTH_RESPONSES,
         422: {"description": "Validation Error"},
@@ -150,8 +145,6 @@ def _create_with_raw_quantity(raw: dict, store: ItemStore) -> ItemRead:
             "required": True,
             "content": {
                 "application/json": {
-                    # Inline the schema rather than $ref so we don't depend
-                    # on FastAPI registering ItemCreate in #/components.
                     "schema": ItemCreate.model_json_schema(),
                 }
             },
@@ -165,10 +158,6 @@ async def create_item(
     try:
         raw = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        # Empty body, non-JSON payload, or non-UTF-8 bytes. Surface as 422
-        # with the standard FastAPI envelope rather than letting Starlette
-        # bubble it to 500 (Schemathesis fuzzes with binary garbage and
-        # flags any 500 as an undocumented status code).
         raise RequestValidationError(
             [
                 {
@@ -184,9 +173,6 @@ async def create_item(
     try:
         body = ItemCreate.model_validate(raw)
     except ValidationError as exc:
-        # Re-raise as the FastAPI variant so the standard 422 envelope
-        # with errors[] array is produced (matches what the framework
-        # would have built had we kept body: ItemCreate as the parameter).
         raise RequestValidationError(exc.errors()) from exc
     item = store.create(name=body.name, quantity=body.quantity)
     return ItemRead(id=item.id, name=item.name, quantity=item.quantity)
@@ -236,12 +222,9 @@ def update_item(
 def _maybe_require_bearer(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> None:
-    """Bearer dependency that turns into a no-op when delete_skips_auth is on.
+    """No-op when delete_skips_auth is on; otherwise delegates to ``require_bearer``.
 
-    The route always declares this dependency; with the defect flag set we
-    short-circuit the check, mirroring a real-world copy-paste where a single
-    HTTP method's auth dependency was silently weakened.
-    See docs/defects/delete_skips_auth.md.
+    docs/defects/delete_skips_auth.md
     """
 
     if defects.enabled("delete_skips_auth"):

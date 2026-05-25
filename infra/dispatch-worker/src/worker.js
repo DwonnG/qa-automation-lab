@@ -1,20 +1,15 @@
-// qa-automation-lab dispatch worker
+// qa-automation-lab dispatch worker.
 //
 // Routes:
-//   POST /dispatch                       Trigger workflow_dispatch
-//   GET  /run/<id>                       Workflow run status + bundle URL
-//   GET  /run/<id>/agent-feedback.md     Extracted agent feedback (text)
-//   GET  /run/<id>/agent-summary.json    Extracted machine-readable summary
-//   OPTIONS *                            CORS preflight
+//   POST /dispatch                     Trigger workflow_dispatch
+//   GET  /run/<id>                     Workflow run status + bundle URL
+//   GET  /run/<id>/agent-feedback.md
+//   GET  /run/<id>/agent-summary.json
+//   OPTIONS *                          CORS preflight
 //
-// Auth is held server-side: env.GITHUB_TOKEN is a fine-scoped PAT with
-// only actions:read + actions:write on this repo. The browser never sees
-// it. Rate limiting (per-IP) lives in env.DISPATCH_KV.
-//
-// Artifact extraction: when a run completes, the worker downloads the
-// `defect-run-bundle` artifact zip via the GitHub Actions API, unzips it
-// in memory with `fflate`, and stashes the two interesting files in KV
-// for ~1h so subsequent polls and direct fetches are fast.
+// env.GITHUB_TOKEN is a fine-scoped PAT (actions:read + actions:write);
+// the browser never sees it. Per-IP rate limiting + bundle cache live
+// in env.DISPATCH_KV with a ~1h TTL.
 
 import { unzipSync, strFromU8 } from "fflate";
 
@@ -124,8 +119,8 @@ async function checkRateLimit(request, env) {
   if (current >= limit) {
     return { ok: false, current, limit };
   }
-  // KV writes are eventually consistent; for a portfolio demo that's
-  // acceptable — burst tolerance is fine, abuse mitigation isn't.
+  // KV writes are eventually consistent; bursts can exceed `limit` for
+  // a few seconds but that's fine for a portfolio demo.
   await env.DISPATCH_KV.put(key, String(current + 1), {
     expirationTtl: 60 * 60,
   });
@@ -163,8 +158,7 @@ async function handleDispatch(request, env, ctx) {
     return json({ error: "no valid defects supplied", unknown }, 400);
   }
   const requestor = String(body.requestor || "dashboard").slice(0, 64);
-  // Stamp before triggering so we can find OUR run with a high-confidence
-  // filter (recent runs by this workflow with this defect set).
+  // Stamp pre-dispatch so we can match our run from the recent list.
   const dispatchedAt = Date.now();
 
   const dispatch = await ghApi(
@@ -195,12 +189,8 @@ async function handleDispatch(request, env, ctx) {
     );
   }
 
-  // workflow_dispatch returns 204 with no body and no run id. We poll
-  // the runs list for ~10s looking for the run we just created. Match on
-  // the workflow's `event = workflow_dispatch` + the requestor's input
-  // string in the display title (it isn't, so we fall back to "most
-  // recent matching dispatched_at"). Limit retries so we don't burn
-  // worker CPU minutes if GitHub takes longer.
+  // workflow_dispatch returns 204 with no run id; poll the recent runs
+  // list and pick the newest one created at-or-after dispatchedAt.
   let runId = null;
   for (let attempt = 0; attempt < 5 && !runId; attempt += 1) {
     await sleep(1500);
@@ -261,13 +251,9 @@ async function handleRunStatus(runId, env, ctx, requestUrl) {
     updated_at: run.updated_at,
   };
   if (run.status === "completed") {
-    // Prime the bundle cache asynchronously so the dashboard's follow-up
-    // fetch is fast. ctx.waitUntil keeps the worker alive past the
-    // response without blocking it.
+    // Prime the cache so the dashboard's follow-up fetch is warm.
     ctx.waitUntil(primeBundleCache(runId, env));
-    // bundle_url MUST be an absolute URL pointing at this worker; the
-    // browser concatenates it with "agent-feedback.md" and posts the
-    // request to that origin (the dashboard runs on Pages, not here).
+    // Must be absolute — the dashboard runs on Pages, not on this worker.
     payload.bundle_url = `${requestUrl.origin}/run/${runId}/`;
   }
   return json(payload);
@@ -298,7 +284,6 @@ async function serveBundleFile(runId, filename, env, ctx) {
 }
 
 async function primeBundleCache(runId, env) {
-  // List artifacts on the run and find the bundle.
   const listRes = await ghApi(
     env,
     `/repos/${env.GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=50`,

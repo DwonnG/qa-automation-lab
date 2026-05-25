@@ -1,17 +1,10 @@
-// qa-automation-lab dashboard — defect-injection panel controller.
+// Defect-injection panel controller.
 //
-// Reads the worker endpoint from <meta name="defect-dispatch-url">; if
-// empty, the panel renders read-only (the build step disables the
-// checkboxes and the "Run" button). When live, clicking the button POSTs
-// the selected defect ids to the worker, which proxies a workflow_dispatch
-// on dispatch-defect-run.yml using a fine-scoped PAT. The worker returns
-// a run id; we poll /run/<id> until the workflow completes, then fetch
-// the agent-feedback.md + agent-summary.json from the worker (which
-// commits the bundle to gh-pages /defect-runs/<id>/).
-//
-// "Example run" links short-circuit the polling loop and just render
-// pre-seeded /defect-runs/example-<id>/ artifacts, so the panel is
-// useful even before the worker is configured.
+// Reads <meta name="defect-dispatch-url"> — empty = read-only mode.
+// When live: POST /dispatch to the worker, poll /run/<id> until done,
+// then fetch the agent bundle. "Example run" links short-circuit to
+// pre-seeded /defect-runs/example-<id>/ artifacts so the panel is
+// useful even without a worker.
 
 (function () {
   "use strict";
@@ -49,8 +42,7 @@
   }
 
   function affectedTiers() {
-    // Mirrors the workflow's defect-to-tier map; used to flip the right
-    // pyramid bands red while a run is in flight.
+    // Mirrors the workflow's defect-to-tier map.
     var rows = panel.querySelectorAll(
       '.defect-row input[type="checkbox"]:checked',
     );
@@ -93,10 +85,9 @@
     });
   }
 
-  // Minimal markdown → HTML for headings, lists, fenced code, inline
-  // backticks, and bold. Pulling in marked.js would be more correct but
-  // adds 30KB of script for a single pane on a static page; the agent's
-  // output is constrained by the prompt to those primitives.
+  // Minimal markdown → HTML. The agent prompt restricts output to
+  // headings, lists, fenced code, inline backticks, and bold, so a 30KB
+  // marked.js dep isn't worth the bytes.
   function renderMarkdown(md) {
     if (!md) return "";
     var safe = String(md)
@@ -113,7 +104,6 @@
     safe = safe.replace(/^## (.*)$/gm, "<h3>$1</h3>");
     safe = safe.replace(/^# (.*)$/gm, "<h2>$1</h2>");
     safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    // List blocks
     var lines = safe.split("\n");
     var out = [];
     var inList = false;
@@ -144,8 +134,6 @@
   }
 
   // ---------- example-run handler -----------------------------------------
-  // The "example run" links on each defect row should not navigate away;
-  // instead they fetch the pre-seeded agent-feedback.md inline.
 
   panel.addEventListener("click", function (e) {
     var link = e.target.closest("[data-defect-example]");
@@ -190,10 +178,7 @@
 
   // ---------- live dispatch (only when DISPATCH_URL is configured) --------
 
-  if (!live || !DISPATCH_URL) {
-    // Still allow example-run clicks above; no live dispatch wiring.
-    return;
-  }
+  if (!live || !DISPATCH_URL) return;
 
   runBtn.addEventListener("click", function () {
     var defects = selectedDefects();
@@ -269,7 +254,6 @@
             }
             return;
           }
-          // Completed — fetch the bundle's agent-feedback.md and summary.
           renderRunResult(runId, tiers, data);
         })
         .catch(function (err) {

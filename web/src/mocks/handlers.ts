@@ -23,11 +23,8 @@ const store: Map<string, DemoItem> = new Map(
 
 const DEMO_PIN = "000000";
 const PIN_PATTERN = /^\d{6}$/u;
-// Issued tokens look like "demo-<uuid>" so the demo can still shape-check
-// the Authorization header without persisting any session-tracking state.
-// Tracking issued tokens in an in-memory Set would otherwise reject any
-// token that survived a page reload (sessionStorage outlives the page
-// bundle's `Set` lifetime), producing spurious 401s on every refresh.
+// Shape-check tokens with a regex instead of a Set so reloads (which
+// blow away the in-memory Set but not sessionStorage) don't 401.
 const TOKEN_PATTERN = /^demo-[\w-]{6,}$/u;
 
 function randomId(): string {
@@ -78,9 +75,7 @@ export const handlers = [
       pin?: unknown;
     } | null;
     const pin = body?.pin;
-    // login_accepts_any_pin defect: accept any well-formed 6-digit PIN
-    // instead of checking it equals DEMO_PIN. See
-    // docs/defects/login_accepts_any_pin.md.
+    // docs/defects/login_accepts_any_pin.md
     const shapeOk = typeof pin === "string" && PIN_PATTERN.test(pin);
     const valueOk = defectEnabled("login_accepts_any_pin")
       ? shapeOk
@@ -99,15 +94,13 @@ export const handlers = [
     const unauthorized = requireBearer(request);
     if (unauthorized) return unauthorized;
     if (defectEnabled("slow_query")) {
-      // Mirror the backend's 400ms sleep on /api/items so a visitor with
-      // the toggle on actually feels the latency in the browser SUT, not
-      // just in k6 SLO output. See docs/defects/slow_query.md.
+      // Mirrors the backend sleep so the in-browser SUT also feels it.
+      // docs/defects/slow_query.md
       await delay(400);
     }
     const items = Array.from(store.values());
     if (defectEnabled("off_by_one_pagination") && items.length > 0) {
-      // Drop the last row of the page. See
-      // docs/defects/off_by_one_pagination.md.
+      // docs/defects/off_by_one_pagination.md
       return HttpResponse.json(items.slice(0, -1));
     }
     return HttpResponse.json(items);
@@ -123,11 +116,8 @@ export const handlers = [
     if (!body || !isCleanName(body.name)) {
       return HttpResponse.json({ detail: "name is required" }, { status: 422 });
     }
-    // negative_qty_allowed defect: skip the clampQuantity gate so any
-    // integer-like value lands in the store. The client Zod schema in
-    // ItemDialog still blocks negatives in the UI, so this defect only
-    // surfaces via direct API calls (Schemathesis, backend integration).
-    // See docs/defects/negative_qty_allowed.md.
+    // Only surfaces via direct API calls; the ItemDialog Zod schema still
+    // blocks negatives in the UI. docs/defects/negative_qty_allowed.md
     let quantity: number | null;
     if (defectEnabled("negative_qty_allowed")) {
       const n =
@@ -200,10 +190,7 @@ export const handlers = [
   }),
 
   http.delete(itemUrl(":id"), ({ params, request }) => {
-    // delete_skips_auth defect: skip the bearer check on DELETE only.
-    // Mirrors a real-world failure where one HTTP method's auth
-    // dependency was silently weakened. The other CRUD methods stay
-    // protected. See docs/defects/delete_skips_auth.md.
+    // docs/defects/delete_skips_auth.md
     if (!defectEnabled("delete_skips_auth")) {
       const unauthorized = requireBearer(request);
       if (unauthorized) return unauthorized;

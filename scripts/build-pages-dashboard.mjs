@@ -49,11 +49,9 @@ const DEFECT_RUNS_DIR = resolve(
 const OUT = resolve(args.out ?? join(ROOT, "_site"));
 const PAGES_BASE = (env.PAGES_BASE ?? "/qa-automation-lab").replace(/\/$/, "");
 
-// Optional: URL to the Cloudflare Worker (or any HTTPS endpoint) that
-// proxies workflow_dispatch + run-status. When set at build time the
-// defect-injection panel becomes a live "Run with defects" trigger;
-// when absent the panel is read-only and the dispatch button is
-// disabled with a "configure DEFECT_DISPATCH_URL" hint.
+// HTTPS endpoint that proxies workflow_dispatch + run-status (the
+// Cloudflare Worker in infra/dispatch-worker/). Unset → panel renders
+// read-only and the dispatch button is disabled.
 const DEFECT_DISPATCH_URL = (env.DEFECT_DISPATCH_URL ?? "").trim();
 
 const REPO_URL = "https://github.com/DwonnG/qa-automation-lab";
@@ -202,9 +200,8 @@ async function main() {
     ) + "\n",
   );
 
-  // Pre-seed /defect-runs/example-<id>/ from docs/defects/example-runs/
-  // so the panel has live-looking output to show before anyone clicks
-  // the dispatch button.
+  // Pre-seed /defect-runs/example-<id>/ so the panel has output to show
+  // before a real run completes.
   if (existsSync(DEFECT_RUNS_DIR)) {
     ensureDir(join(OUT, "defect-runs"));
     for (const entry of readdirSync(DEFECT_RUNS_DIR)) {
@@ -1160,12 +1157,7 @@ function renderPerfStats(perf) {
 // nothing on the dashboard renders them any more.)
 
 // ---------------------------------------------------------------------------
-// Defect injection panel
-//
-// loadDefectsCatalog() parses docs/defects/*.md frontmatter (a tiny YAML
-// subset: key/value scalars + the `caught_by` list). renderDefectsSection()
-// emits the chooser UI. The actual dispatch + polling logic lives in
-// pages/dispatch.js and reads metadata from <meta> tags injected here.
+// Defect injection panel — dispatch + polling lives in pages/dispatch.js
 // ---------------------------------------------------------------------------
 
 function loadDefectsCatalog() {
@@ -1183,8 +1175,7 @@ function loadDefectsCatalog() {
       console.warn(`[build-pages] skip defect ${name}: ${err.message}`);
     }
   }
-  // Stable order: same as KNOWN_DEFECTS in web/src/lib/defects.ts so the
-  // panel and the in-browser SUT toggle list match top-to-bottom.
+  // Mirrors KNOWN_DEFECTS in web/src/lib/defects.ts.
   const order = [
     "login_accepts_any_pin",
     "negative_qty_allowed",
@@ -1200,9 +1191,8 @@ function loadDefectsCatalog() {
   return out;
 }
 
-// Tiny YAML-subset parser: enough for the frontmatter shape used by the
-// defect catalog (scalar key: value, multiline `|` blocks, list of
-// objects under `caught_by:`). Refuses anything more exotic.
+// YAML-subset parser: scalar key/value, `|` block scalars, and lists of
+// objects under `caught_by:`. Anything more exotic is ignored.
 function parseFrontmatter(text) {
   const m = text.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!m) return null;
@@ -1223,7 +1213,6 @@ function parseFrontmatter(text) {
     const key = kv[1];
     let value = kv[2].trim();
     if (value === "|") {
-      // Block scalar: consume indented lines.
       const block = [];
       i += 1;
       while (i < lines.length && /^\s{2,}/.test(lines[i])) {
@@ -1234,13 +1223,10 @@ function parseFrontmatter(text) {
       continue;
     }
     if (value === "") {
-      // Could be a list: peek next line for `  - `.
       if (i + 1 < lines.length && /^\s*-\s/.test(lines[i + 1])) {
         const items = [];
         i += 1;
         while (i < lines.length && /^\s*-\s/.test(lines[i])) {
-          // List item; collect nested key: value pairs until next `-` or
-          // end of indented block.
           const item = {};
           const first = lines[i].replace(/^\s*-\s*/, "");
           if (first.includes(":")) {
@@ -1263,7 +1249,6 @@ function parseFrontmatter(text) {
         continue;
       }
     }
-    // Strip surrounding quotes; coerce true/false.
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))

@@ -25,8 +25,7 @@ class InvalidTokenError(ValueError):
 
 def issue_token(pin: str) -> str:
     if defects.enabled("login_accepts_any_pin"):
-        # Skip the constant-time compare; accept any well-formed 6-digit PIN.
-        # See docs/defects/login_accepts_any_pin.md.
+        # docs/defects/login_accepts_any_pin.md
         if not isinstance(pin, str) or not _PIN_SHAPE.fullmatch(pin):
             raise InvalidPinError("invalid pin")
     elif not isinstance(pin, str) or not hmac.compare_digest(pin, DEMO_PIN):

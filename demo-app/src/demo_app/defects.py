@@ -1,17 +1,10 @@
 """Intentional-defect flag registry.
 
-The defect-injection demo flips boolean flags via the ``DEFECTS`` env var
-(CSV of ids) and branches production code paths to introduce one specific
-bug per flag. With ``DEFECTS`` empty or unset every branch is a no-op and
-the app behaves correctly.
+Reads CSV ids from ``DEFECTS`` env var and branches handlers to introduce
+one bug per id. Resolved per-call so tests can mutate ``os.environ``
+between cases without re-importing.
 
-Flags are resolved **per call** rather than cached at import so test
-runners that mutate ``os.environ`` between cases observe the change
-without re-importing the module.
-
-See ``docs/defects/`` for the full catalog and the per-defect markdown
-files (each one names the suite that catches it and the assertion that
-fires).
+Catalog: ``docs/defects/``.
 """
 
 from __future__ import annotations
@@ -38,10 +31,10 @@ def _active_set() -> frozenset[str]:
 
 
 def enabled(defect_id: str) -> bool:
-    """Return True when the named defect should branch its buggy path.
+    """True iff ``defect_id`` is in ``KNOWN_DEFECTS`` and currently active.
 
-    Unknown ids always return False so a typo in the env var can never
-    silently activate a different defect.
+    Unknown ids always return False, so a typo can't silently flip a
+    different defect on.
     """
 
     if defect_id not in KNOWN_DEFECTS:
@@ -50,6 +43,4 @@ def enabled(defect_id: str) -> bool:
 
 
 def active() -> frozenset[str]:
-    """Return the validated set of active defect ids (for logging)."""
-
     return _active_set() & KNOWN_DEFECTS

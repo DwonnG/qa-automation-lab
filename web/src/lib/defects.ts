@@ -1,19 +1,10 @@
 // Intentional-defect flag registry for the in-browser SUT.
+// Mirrors `demo-app/src/demo_app/defects.py`.
 //
-// Mirrors `demo-app/src/demo_app/defects.py`. The list of known ids is
-// duplicated here on purpose so a typo in either layer fails to
-// silently activate the wrong defect.
-//
-// Resolution order (first match wins):
-//   1. `sessionStorage["qa-automation-lab.defects"]` — set by the
-//      DefectsPanel toggle so visitors can flip bugs without rebuilding.
-//   2. `import.meta.env.VITE_DEFECTS` — build-time default; used by the
-//      pre-seeded `/defect-runs/example-<id>/` deploys so the dashboard
-//      can demo each defect even before the visitor clicks anything.
-//
-// MSW handlers read the flag at request time (call `defectEnabled()`
-// inside the handler body, not at module load) so toggles take effect
-// immediately on the next API call.
+// Active ids come from sessionStorage (DefectsPanel toggles) merged with
+// the `VITE_DEFECTS` build-time default. MSW handlers must call
+// `defectEnabled()` *inside* the handler body, not at import time, so
+// toggles take effect on the next request without a reload.
 
 export const KNOWN_DEFECTS = [
   "login_accepts_any_pin",
@@ -48,8 +39,6 @@ function sessionDefects(): Set<string> {
 }
 
 function buildDefects(): Set<string> {
-  // import.meta.env.VITE_DEFECTS is statically replaced at build time;
-  // reading it here is safe in both browser and node test environments.
   return parseCsv(import.meta.env?.VITE_DEFECTS);
 }
 

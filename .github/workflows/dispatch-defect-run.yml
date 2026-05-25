@@ -1,18 +1,15 @@
 name: Defect dispatch run
 
-# Triggered from the dashboard's defect-injection panel (via a Cloudflare
-# Worker proxy that holds a fine-scoped PAT) or by hand:
-#
+# Triggered from the dashboard's defect-injection panel (via the
+# Cloudflare Worker in infra/dispatch-worker/) or by hand:
 #   gh workflow run dispatch-defect-run.yml \
 #     -f defects=login_accepts_any_pin,off_by_one_pagination \
-#     -f requestor=dashboard
+#     -f requestor=manual
 #
-# Picks the smallest set of suites that catches the chosen defects, runs
-# them with DEFECTS=... in the backend env (and VITE_DEFECTS=... in the
-# web build), then asks GitHub Models to write a markdown post-mortem.
-# Every job uploads JUnit/HTML/k6 artifacts; a final agent-review job
-# bundles them with agent-feedback.md into `defect-run-bundle` so the
-# dashboard can fetch one tarball.
+# Picks the minimal set of suites that catches the chosen defects, runs
+# them with DEFECTS / VITE_DEFECTS set, then asks GitHub Models for a
+# markdown post-mortem. The final agent-review job bundles every
+# defect-run-* artifact into `defect-run-bundle`.
 
 on:
   workflow_dispatch:
@@ -28,11 +25,8 @@ on:
         type: string
 
 permissions:
-  # Cross-workflow artifact reads are unnecessary; this workflow only
-  # produces artifacts. `models: read` is required by the agent-review
-  # job's GitHub Models call.
   contents: read
-  models: read
+  models: read # agent-review calls GitHub Models
 
 concurrency:
   group: defect-run-${{ inputs.requestor }}-${{ github.run_id }}
@@ -63,10 +57,8 @@ jobs:
         name: Map defects to suites
         env:
           DEFECTS_INPUT: ${{ inputs.defects }}
-        # Defect -> suite mapping mirrors the catalog in docs/defects/.
-        # Single source of truth lives in this bash assoc array so the
-        # dashboard, the agent script, and CI can stay in sync without
-        # importing a shared module across runtimes.
+        # Source of truth for the defect -> suite mapping. Mirrors the
+        # `caught_by` block in each docs/defects/<id>.md.
         run: |
           set -euo pipefail
           declare -A defect_to_suites=(
@@ -119,9 +111,7 @@ jobs:
         run: uv sync
       - name: Run pytest with DEFECTS set
         working-directory: demo-app
-        # `--continue-on-collection-errors` keeps the run going even if a
-        # collection fails; `|| true` ensures the artifact upload runs.
-        # The agent-review job is the one that flips the workflow red.
+        # `|| true` so the artifact upload + agent-review still run.
         run: |
           uv run pytest --junitxml=report.xml || true
       - uses: actions/upload-artifact@v7
