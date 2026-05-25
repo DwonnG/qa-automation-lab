@@ -35,6 +35,8 @@ const DEFECT_HINTS = {
     "DELETE /api/items/{id}'s bearer dependency is conditionally bypassed, leaving only DELETE unauthenticated. The parametrized 'test_missing_bearer_returns_401[delete_item]' case is the smoking gun.",
   slow_query:
     "time.sleep(0.4) at the top of list_items breaks the k6 p95<200ms SLO. summary.thresholds_passed flips to false.",
+  selector_drift:
+    "The items-header Add Item button is relabeled 'Create new item' in web/src/App.tsx when this flag is on. Playwright's ItemsPage.openAddItemDialog() calls getByRole('button', { name: /add item/i }) and times out. App behavior is unchanged — the fix is on the test side: update the page-object regex to accept either copy and centralize the literal so future renames are a one-line change.",
 };
 
 // --- artifact discovery ---------------------------------------------------

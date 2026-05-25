@@ -19,6 +19,7 @@ KNOWN_DEFECTS: Final[frozenset[str]] = frozenset(
         "off_by_one_pagination",
         "delete_skips_auth",
         "slow_query",
+        "selector_drift",
     }
 )
 

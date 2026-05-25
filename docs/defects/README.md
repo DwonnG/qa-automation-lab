@@ -32,13 +32,14 @@ Regenerate them whenever the defect surface changes — see
 
 ## Catalog
 
-| Id                                                  | Tier                           | Visible in browser?   | Caught by                                    |
-| --------------------------------------------------- | ------------------------------ | --------------------- | -------------------------------------------- |
-| [`login_accepts_any_pin`](login_accepts_any_pin.md) | Backend unit + UI E2E          | Yes                   | `test_auth.py`, Playwright login             |
-| [`negative_qty_allowed`](negative_qty_allowed.md)   | Backend integration + Contract | No (client validates) | `test_items.py`, Schemathesis                |
-| [`off_by_one_pagination`](off_by_one_pagination.md) | Backend integration + UI E2E   | Yes (one row missing) | `test_items.py` pagination, Playwright count |
-| [`delete_skips_auth`](delete_skips_auth.md)         | API E2E                        | No (subtle)           | `pytest-api/test_auth_required.py`           |
-| [`slow_query`](slow_query.md)                       | Performance (k6)               | Yes (slower load)     | k6 p95 SLO                                   |
+| Id                                                  | Tier                           | Visible in browser?    | Caught by                                    |
+| --------------------------------------------------- | ------------------------------ | ---------------------- | -------------------------------------------- |
+| [`login_accepts_any_pin`](login_accepts_any_pin.md) | Backend unit + UI E2E          | Yes                    | `test_auth.py`, Playwright login             |
+| [`negative_qty_allowed`](negative_qty_allowed.md)   | Backend integration + Contract | No (client validates)  | `test_items.py`, Schemathesis                |
+| [`off_by_one_pagination`](off_by_one_pagination.md) | Backend integration + UI E2E   | Yes (one row missing)  | `test_items.py` pagination, Playwright count |
+| [`delete_skips_auth`](delete_skips_auth.md)         | API E2E                        | No (subtle)            | `pytest-api/test_auth_required.py`           |
+| [`slow_query`](slow_query.md)                       | Performance (k6)               | Yes (slower load)      | k6 p95 SLO                                   |
+| [`selector_drift`](selector_drift.md)               | UI E2E                         | Yes (button relabeled) | Playwright items + a11y (locator timeout)    |
 
 ## Adding a new defect
 

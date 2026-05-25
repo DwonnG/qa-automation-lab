@@ -1187,6 +1187,7 @@ function loadDefectsCatalog() {
     "off_by_one_pagination",
     "delete_skips_auth",
     "slow_query",
+    "selector_drift",
   ];
   out.sort((a, b) => {
     const ai = order.indexOf(a.id);
@@ -1281,6 +1282,7 @@ const CATEGORY_LABELS = {
   security: "SECURITY",
   data: "DATA",
   perf: "PERF",
+  test: "TEST",
 };
 
 // Inline SVG icons keyed by defect id. Lucide-ish stroke style at 24px
@@ -1291,6 +1293,7 @@ const DEFECT_ICONS = {
   negative_qty_allowed: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.5 7 12 12 20.5 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>`,
   off_by_one_pagination: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="4" cy="18" r="1.5"/></svg>`,
   slow_query: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>`,
+  selector_drift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5l6 6-11 11H3.5v-6z"/><path d="M13 5l6 6"/><path d="M3 21h18"/></svg>`,
 };
 
 const DEFECT_CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>`;

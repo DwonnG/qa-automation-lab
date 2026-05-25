@@ -12,6 +12,7 @@ export const KNOWN_DEFECTS = [
   "off_by_one_pagination",
   "delete_skips_auth",
   "slow_query",
+  "selector_drift",
 ] as const;
 
 export type DefectId = (typeof KNOWN_DEFECTS)[number];

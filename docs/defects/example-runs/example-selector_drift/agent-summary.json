@@ -1,0 +1,40 @@
+{
+  "defects": ["selector_drift"],
+  "totals": { "failed": 5, "passed": 1, "skipped": 0, "suiteCount": 1 },
+  "failures": [
+    {
+      "suite": "playwright",
+      "classname": "tests.items",
+      "name": "adds an item and shows it in the table",
+      "message": "TimeoutError: locator.click: Timeout 5000ms exceeded waiting for getByRole('button', { name: /add item/i })"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.items",
+      "name": "edits an existing item",
+      "message": "TimeoutError: locator.click: Timeout 5000ms exceeded waiting for getByRole('button', { name: /add item/i })"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.items",
+      "name": "deletes an item",
+      "message": "TimeoutError: locator.click: Timeout 5000ms exceeded waiting for getByRole('button', { name: /add item/i })"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.items",
+      "name": "blocks save when the name field is empty",
+      "message": "TimeoutError: locator.click: Timeout 5000ms exceeded waiting for getByRole('button', { name: /add item/i })"
+    },
+    {
+      "suite": "playwright",
+      "classname": "tests.a11y",
+      "name": "items page (add dialog open) has no critical accessibility issues",
+      "message": "TimeoutError: locator.click: Timeout 5000ms exceeded waiting for getByRole('button', { name: /add item/i })"
+    }
+  ],
+  "perf_thresholds_passed": null,
+  "perf_summary": null,
+  "agent_status": "ok",
+  "model": "openai/gpt-4o-mini"
+}

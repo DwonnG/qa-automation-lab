@@ -67,6 +67,7 @@ jobs:
             [off_by_one_pagination]="backend playwright"
             [delete_skips_auth]="backend pytest-api"
             [slow_query]="perf"
+            [selector_drift]="playwright"
           )
           declare -A want
           IFS=',' read -ra ids <<< "$DEFECTS_INPUT"

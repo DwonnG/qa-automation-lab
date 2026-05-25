@@ -17,6 +17,7 @@ const LABELS: Record<DefectId, string> = {
   off_by_one_pagination: "Off-by-one pagination",
   delete_skips_auth: "DELETE skips auth",
   slow_query: "List endpoint sleeps 400ms",
+  selector_drift: "Add item button renamed",
 };
 
 export function DefectsPanel() {

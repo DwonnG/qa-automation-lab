@@ -7,6 +7,7 @@ import { ItemsTable } from "@/components/ItemsTable";
 import { LoginForm } from "@/components/LoginForm";
 import { Button } from "@/components/ui/button";
 import { clearToken, getToken } from "@/lib/auth";
+import { defectEnabled } from "@/lib/defects";
 
 export function App() {
   const [token, setTokenState] = useState<string | null>(() => getToken());
@@ -42,7 +43,7 @@ export function App() {
           </div>
           <div className="flex gap-2">
             <Button onClick={() => setDialogMode({ kind: "create" })}>
-              Add item
+              {defectEnabled("selector_drift") ? "Create new item" : "Add item"}
             </Button>
             <Button
               variant="outline"

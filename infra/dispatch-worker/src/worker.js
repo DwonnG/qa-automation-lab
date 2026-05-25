@@ -19,6 +19,7 @@ const KNOWN_DEFECTS = new Set([
   "off_by_one_pagination",
   "delete_skips_auth",
   "slow_query",
+  "selector_drift",
 ]);
 
 const TARGET_BUNDLE_ARTIFACT = "defect-run-bundle";
