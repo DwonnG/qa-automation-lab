@@ -471,7 +471,11 @@ async function primeBundleCache(runId, env) {
       });
     }
   }
-  return recordDiag({ ok: true, files: written, zip_bytes: zipBytes.byteLength });
+  return recordDiag({
+    ok: true,
+    files: written,
+    zip_bytes: zipBytes.byteLength,
+  });
 }
 
 async function safeText(res) {

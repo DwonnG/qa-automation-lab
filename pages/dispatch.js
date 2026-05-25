@@ -429,10 +429,7 @@
         } else {
           // Tests ran clean AND the workflow passed → real coverage gap.
           // The defect made it through every suite that opted in to it.
-          msg =
-            "Run #" +
-            runId +
-            " · defect escaped — no tests caught it.";
+          msg = "Run #" + runId + " · defect escaped — no tests caught it.";
           klass = "warn";
           clearTierMarks();
         }
