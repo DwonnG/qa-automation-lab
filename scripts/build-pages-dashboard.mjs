@@ -1287,8 +1287,8 @@ function renderDefectInjector(catalog) {
   if (catalog.length === 0) return "";
   const live = Boolean(DEFECT_DISPATCH_URL);
 
-  // Order options top-of-pyramid down so the dropdown's flow mirrors
-  // the pyramid's silhouette on the left.
+  // Order pills top-of-pyramid down so the pill flow mirrors the
+  // pyramid's silhouette on the left.
   const tierOrder = ["ui", "api", "integration", "component", "unit"];
   const sorted = [...catalog].sort((a, b) => {
     const ai = tierOrder.indexOf(a.tier);
@@ -1297,14 +1297,14 @@ function renderDefectInjector(catalog) {
     return (a.title || a.id).localeCompare(b.title || b.id);
   });
 
-  const options = sorted
-    .map(
-      (d) =>
-        `<option value="${escapeAttr(d.id)}">${escapeHtml(d.title || d.id)}</option>`,
-    )
+  const pills = sorted
+    .map((d) => {
+      const tierKey = (d.tier || "").toLowerCase();
+      return `<button type="button" class="defect-injector-pill defect-injector-pill--tier-${escapeAttr(tierKey)}" data-defect-pill="${escapeAttr(d.id)}" role="radio" aria-checked="false"><span class="defect-injector-pill-dot" aria-hidden="true"></span><span class="defect-injector-pill-label">${escapeHtml(d.title || d.id)}</span></button>`;
+    })
     .join("");
 
-  // Inline catalog JSON so the dropdown handler can populate the detail
+  // Inline catalog JSON so the pill handler can populate the detail
   // card and resolve tier/spec links without a second HTTP roundtrip.
   const catalogJson = JSON.stringify(
     Object.fromEntries(
@@ -1336,13 +1336,12 @@ function renderDefectInjector(catalog) {
     </div>
     <div class="defect-injector" data-live="${live ? "true" : "false"}">
       <script type="application/json" data-defect-catalog>${catalogJson}</script>
-      <label class="defect-injector-field">
+      <div class="defect-injector-field">
         <span class="defect-injector-field-label">Inject defect</span>
-        <select class="defect-injector-select" data-defect-select aria-label="Choose a defect to inject">
-          <option value="">Choose a defect…</option>
-          ${options}
-        </select>
-      </label>
+        <div class="defect-injector-pills" role="radiogroup" aria-label="Choose a defect to inject" data-defect-pills>
+          ${pills}
+        </div>
+      </div>
 
       <div class="defect-injector-detail" hidden data-defect-detail aria-live="polite"></div>
 

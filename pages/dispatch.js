@@ -21,11 +21,12 @@
   var panel = document.querySelector(".defect-injector");
   if (!panel) return;
 
-  var select = panel.querySelector("[data-defect-select]");
+  var pillGroup = panel.querySelector("[data-defect-pills]");
   var detailEl = panel.querySelector("[data-defect-detail]");
   var statusEl = panel.querySelector("[data-defect-status]");
   var resultEl = panel.querySelector("[data-defect-result]");
   var live = panel.getAttribute("data-live") === "true";
+  var selectedId = "";
 
   var catalogNode = panel.querySelector("[data-defect-catalog]");
   var catalog = {};
@@ -205,21 +206,41 @@
     detailEl.hidden = false;
   }
 
-  // ---------- dropdown change handler -------------------------------------
+  // ---------- pill group change handler -----------------------------------
+  //
+  // Behaves like a single-select radio group: clicking a pill selects it,
+  // clicking the active pill again deselects (so the user can clear
+  // without a separate button). Mouse + keyboard both go through the
+  // same path because the pills are real <button> elements.
 
-  select.addEventListener("change", function () {
-    var id = select.value;
+  function setSelected(id) {
+    selectedId = id || "";
+    var pills = pillGroup.querySelectorAll("[data-defect-pill]");
+    pills.forEach(function (p) {
+      var active = p.getAttribute("data-defect-pill") === selectedId;
+      p.setAttribute("aria-checked", active ? "true" : "false");
+      p.classList.toggle("defect-injector-pill--selected", active);
+    });
+
     dismissResult();
     setStatus("");
-    if (!id) {
+
+    if (!selectedId) {
       clearTierMarks();
       detailEl.hidden = true;
       detailEl.innerHTML = "";
       return;
     }
-    var d = catalog[id];
+    var d = catalog[selectedId];
     if (d && d.tier) markTierPending(d.tier);
-    renderDetail(id);
+    renderDetail(selectedId);
+  }
+
+  pillGroup.addEventListener("click", function (e) {
+    var pill = e.target.closest("[data-defect-pill]");
+    if (!pill || !pillGroup.contains(pill)) return;
+    var id = pill.getAttribute("data-defect-pill");
+    setSelected(id === selectedId ? "" : id);
   });
 
   // ---------- example-output handler --------------------------------------

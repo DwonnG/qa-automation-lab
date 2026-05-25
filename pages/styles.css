@@ -2134,47 +2134,93 @@ code {
   text-transform: uppercase;
   color: var(--accent-muted);
 }
-.defect-injector-select {
-  appearance: none;
-  -webkit-appearance: none;
+/* Defect pill group: wraps to multiple rows inside the injector frame.
+   Behaves as a single-select radio group — one selected pill at a time,
+   click again to deselect. Pills carry the same visual weight as other
+   small chips in the dashboard (status-chip, defect-row-cat) so they
+   don't introduce a new control language. */
+.defect-injector-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.defect-injector-pill {
+  --pill-tier-color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--text);
   background: color-mix(in srgb, var(--text) 3%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  border-radius: 8px;
-  padding: 0.55rem 2.2rem 0.55rem 0.8rem;
+  border-radius: 999px;
+  padding: 0.42rem 0.9rem 0.42rem 0.7rem;
   cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-    linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 1.1rem) 50%, calc(100% - 0.7rem) 50%;
-  background-size: 6px 6px, 6px 6px;
-  background-repeat: no-repeat;
-  color: var(--text);
+  text-align: left;
+  line-height: 1.2;
   transition:
     border-color 0.18s var(--ease-out),
-    background-color 0.18s var(--ease-out);
+    background-color 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out),
+    transform 0.12s var(--ease-out);
 }
-.defect-injector-select:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  background-color: color-mix(in srgb, var(--text) 5%, transparent);
+.defect-injector-pill:hover {
+  border-color: color-mix(in srgb, var(--pill-tier-color) 40%, var(--border));
+  background-color: color-mix(
+    in srgb,
+    var(--pill-tier-color) 6%,
+    color-mix(in srgb, var(--text) 4%, transparent)
+  );
 }
-.defect-injector-select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+.defect-injector-pill:focus-visible {
+  outline: 2px solid var(--pill-tier-color);
+  outline-offset: 2px;
 }
-.defect-injector-select optgroup {
-  font-style: normal;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-  background: var(--bg);
+.defect-injector-pill:active {
+  transform: translateY(1px);
 }
-.defect-injector-select option {
-  font-family: var(--font-mono);
-  background: var(--bg);
+.defect-injector-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pill-tier-color);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--pill-tier-color) 18%, transparent);
+  flex: 0 0 auto;
+}
+.defect-injector-pill-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+.defect-injector-pill--selected {
   color: var(--text);
+  background-color: color-mix(in srgb, var(--pill-tier-color) 18%, transparent);
+  border-color: color-mix(in srgb, var(--pill-tier-color) 65%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--pill-tier-color) 45%, transparent),
+    0 4px 14px -8px color-mix(in srgb, var(--pill-tier-color) 60%, transparent);
+}
+
+/* Per-tier accents so each pill quietly belongs to its pyramid layer.
+   The dot, hover ring, and selected glow all derive from these. */
+.defect-injector-pill--tier-ui {
+  --pill-tier-color: #6ec6c5; /* teal — UI E2E */
+}
+.defect-injector-pill--tier-api {
+  --pill-tier-color: #8aa2d6; /* indigo — API */
+}
+.defect-injector-pill--tier-component {
+  --pill-tier-color: #b48cc4; /* purple — Component */
+}
+.defect-injector-pill--tier-integration {
+  --pill-tier-color: #cf8b9b; /* rose — Integration */
+}
+.defect-injector-pill--tier-unit {
+  --pill-tier-color: #d28a8a; /* wine — Unit */
 }
 /* Detail card: the selected defect's category / tier / title / summary / actions.
    Sits inside the injector frame as a nested widget — same chrome as
