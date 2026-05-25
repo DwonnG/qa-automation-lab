@@ -2796,6 +2796,23 @@ code {
   }
 }
 
+/* When a tier has caught a defect, mute the per-suite "X% pass" cells so
+   the loud "× N CAUGHT" chip at the top is the unambiguous truth. The
+   numbers stay accurate (the suites really did pass before the defect
+   was injected); we only desaturate so they stop fighting the failure
+   chip for attention. */
+.lab-tier--defect-failed .lab-row-stat--accent strong,
+.lab-tier--defect-failed .lab-row-stat--accent em {
+  color: var(--text-tertiary);
+}
+
+/* While a live run is in flight, hide the example-output shortcut — the
+   panel is already locked from switching defects, and racing the live
+   result against an example would overwrite the running run's panel. */
+.defect-injector--running .defect-injector-example {
+  display: none;
+}
+
 .lab-tier .status-chip.lab-tier-defect-chip {
   font-size: 0.68rem;
   letter-spacing: 0.12em;
