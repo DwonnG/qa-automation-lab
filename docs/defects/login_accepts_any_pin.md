@@ -2,6 +2,7 @@
 id: login_accepts_any_pin
 title: Login accepts any 6-digit PIN
 tier: ui
+category: auth
 summary: |
   The auth layer issues a session token for any well-formed 6-digit PIN
   instead of checking it against the demo PIN with a constant-time

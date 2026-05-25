@@ -1271,6 +1271,13 @@ const TIER_LABELS = {
   unit: "Unit",
 };
 
+const CATEGORY_LABELS = {
+  auth: "AUTH",
+  security: "SECURITY",
+  data: "DATA",
+  perf: "PERF",
+};
+
 function renderDefectsSection(catalog) {
   if (catalog.length === 0) return "";
   const live = Boolean(DEFECT_DISPATCH_URL);
@@ -1280,13 +1287,15 @@ function renderDefectsSection(catalog) {
   const rows = catalog
     .map((d) => {
       const tier = TIER_LABELS[d.tier] || escapeHtml(d.tier || "");
+      const categoryKey = (d.category || "").toLowerCase();
+      const category = CATEGORY_LABELS[categoryKey] || "";
       // Visible line is CSS-truncated to a single line; the full body is
       // exposed via the row's `title` tooltip for at-a-glance hover.
       const summary = escapeHtml(
         (d.summary || "").split("\n")[0].slice(0, 200),
       );
       return `
-        <li class="defect-row" data-defect-id="${escapeAttr(d.id)}" data-tier="${escapeAttr(d.tier || "")}">
+        <li class="defect-row" data-defect-id="${escapeAttr(d.id)}" data-tier="${escapeAttr(d.tier || "")}" data-category="${escapeAttr(categoryKey)}">
           <label class="defect-row-toggle">
             <input
               type="checkbox"
@@ -1297,6 +1306,11 @@ function renderDefectsSection(catalog) {
             />
             <div class="defect-row-body">
               <div class="defect-row-head">
+                ${
+                  category
+                    ? `<span class="defect-row-cat defect-row-cat--${escapeAttr(categoryKey)}" title="${escapeAttr(category)} class of defect">${escapeHtml(category)}</span>`
+                    : ""
+                }
                 <code class="defect-row-id">${escapeHtml(d.id)}</code>
                 <span class="defect-row-tier">${escapeHtml(tier)}</span>
                 ${

@@ -154,6 +154,34 @@
     resultEl.hidden = false;
   }
 
+  function dismissResult() {
+    resultEl.hidden = true;
+    resultEl.innerHTML = "";
+    clearTierMarks();
+    setStatus("");
+  }
+
+  // Close-button delegation + Escape key both collapse an expanded result.
+  resultEl.addEventListener("click", function (e) {
+    if (e.target.closest("[data-defect-result-close]")) {
+      e.preventDefault();
+      dismissResult();
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !resultEl.hidden) {
+      dismissResult();
+    }
+  });
+
+  function resultCloseButton() {
+    return (
+      '<button type="button" class="defect-result-close" ' +
+      'data-defect-result-close aria-label="Close result panel" ' +
+      'title="Close (Esc)">×</button>'
+    );
+  }
+
   // ---------- example-run handler -----------------------------------------
 
   panel.addEventListener("click", function (e) {
@@ -178,6 +206,8 @@
             '<span class="defect-result-tag">Example run · ' +
             id +
             "</span>" +
+            '<span class="defect-result-spacer"></span>' +
+            resultCloseButton() +
             "</header>" +
             '<div class="defect-result-body">' +
             renderMarkdown(md) +
@@ -332,6 +362,8 @@
                 data.run_url +
                 '" target="_blank" rel="noopener">view in Actions ↗</a>'
               : "") +
+            '<span class="defect-result-spacer"></span>' +
+            resultCloseButton() +
             "</header>" +
             '<div class="defect-result-body">' +
             renderMarkdown(md) +

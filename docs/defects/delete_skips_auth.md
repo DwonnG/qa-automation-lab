@@ -2,6 +2,7 @@
 id: delete_skips_auth
 title: DELETE /api/items/{id} bypasses bearer auth
 tier: api
+category: security
 summary: |
   The DELETE handler removes its `Depends(require_bearer)` dependency when
   this flag is on, allowing any unauthenticated client to remove items.

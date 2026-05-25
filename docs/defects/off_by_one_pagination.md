@@ -2,6 +2,7 @@
 id: off_by_one_pagination
 title: List endpoint drops the last item on every page
 tier: integration
+category: data
 summary: |
   GET /api/items supports `page` and `page_size` query params. The slice math
   in the defect path uses `items[start:end - 1]`, silently truncating the

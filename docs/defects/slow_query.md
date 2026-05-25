@@ -2,6 +2,7 @@
 id: slow_query
 title: List endpoint sleeps 400ms per request
 tier: integration
+category: perf
 summary: |
   GET /api/items adds a 400ms sleep at the top of the handler when this
   flag is on, breaking the k6 p95 SLO (200ms) without breaking any
