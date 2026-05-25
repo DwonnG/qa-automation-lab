@@ -62,11 +62,9 @@ async function findJunitFiles(root) {
 }
 
 async function readK6Summary(root) {
-  // actions/download-artifact@v8 places multi-artifact downloads under
-  // `<root>/<artifact-name>/...`, but when only one artifact matches the
-  // pattern (e.g. a slow_query run that only triggers `perf`) it flattens
-  // the contents to `<root>/`. Check both layouts so the agent doesn't
-  // silently miss the k6 thresholds_passed signal.
+  // actions/download-artifact@v8 flattens the contents to `<root>/`
+  // when only one artifact matches the pattern, instead of nesting
+  // them under `<root>/<artifact-name>/`. Check both layouts.
   const candidates = [
     join(root, "defect-run-perf", "summary.json"),
     join(root, "summary.json"),

@@ -463,11 +463,6 @@
           summary && summary.totals ? summary.totals.failed || 0 : null;
         var agentStatus = summary && summary.agent_status;
 
-        // Drive both the tier color AND the status pill from the same
-        // source: the per-test failure count from agent-summary.json.
-        // "no-failures", "dry-run", and "fallback:*" are all benign — the
-        // review markdown still rendered and is in the panel below; only
-        // a truly missing/erroring review should claim "no review."
         var benignAgentStatuses = ["ok", "no-failures", "dry-run"];
         var agentHardError =
           agentStatus &&
@@ -490,10 +485,6 @@
           klass = "err";
           if (d && d.tier) markTierFailed(d.tier, failed);
         } else if (data.conclusion && data.conclusion !== "success") {
-          // Workflow conclusion is failure but no JUnit/k6 failures were
-          // captured — surface the build failure honestly instead of
-          // claiming success. The tier still flips red because the build
-          // itself "caught" something even if assertions didn't.
           msg =
             "Build failed (" +
             data.conclusion +
