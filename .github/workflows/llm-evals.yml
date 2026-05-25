@@ -1,0 +1,95 @@
+name: LLM Evals
+
+on:
+  # Runs on a schedule so model drift surfaces even without a code change,
+  # and on demand for prompt iteration. Skipped on regular PRs by design:
+  # eval calls cost money and shouldn't fire on every fork's push.
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "llm-evals/**"
+      - ".github/workflows/llm-evals.yml"
+
+concurrency:
+  group: llm-evals-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.5.10"
+
+jobs:
+  offline-evals:
+    name: llm-evals (offline schema checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync deps
+        working-directory: llm-evals
+        run: uv sync
+      - name: Lint
+        working-directory: llm-evals
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Offline evals
+        working-directory: llm-evals
+        run: uv run pytest -m "not live" --junitxml=offline-report.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: llm-evals-offline
+          path: llm-evals/offline-report.xml
+
+  live-evals:
+    name: llm-evals (live LLM-as-judge)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: offline-evals
+    # Gate on the secret being present so forks and missing-secret runs
+    # exit cleanly instead of failing red.
+    if: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Sync deps
+        working-directory: llm-evals
+        run: uv sync
+      - name: Run live evals
+        working-directory: llm-evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LANGSMITH_TRACING: "true"
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: qa-automation-lab-llm-evals
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY secret not configured; skipping live evals."
+            exit 0
+          fi
+          uv run pytest -m live --junitxml=live-report.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: llm-evals-live
+          path: llm-evals/live-report.xml

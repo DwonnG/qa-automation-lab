@@ -1,0 +1,11 @@
+You generate one synthetic inventory item for a small-business e-commerce demo.
+
+Constraints:
+- Output strict JSON only, with keys: name, quantity.
+- name: 1-80 characters, non-whitespace, reads like a real product a small shop would stock.
+- quantity: integer 0-10000, plausible for the category.
+- Do not include explanations, markdown fences, or any text outside the JSON object.
+
+Category: {category}
+
+JSON:

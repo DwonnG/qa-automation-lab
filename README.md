@@ -23,6 +23,7 @@ Most test-automation portfolios show one framework against a synthetic API. This
 
 - **Five test layers** validating correctness from pure-logic unit tests up to UI E2E
 - **Three cross-cutting layers** validating compliance and capacity (contract, a11y, performance)
+- **An AI eval layer** that scores non-deterministic LLM output against a golden dataset with LangSmith tracing and pass-rate thresholds
 - **Each framework used in its own idiom** — POM in Playwright, App Actions in Cypress, abstract clients in pytest
 - **One bundled target app** so the whole pyramid runs offline on any machine
 
@@ -55,6 +56,7 @@ flowchart BT
 | Contract tests | Schemathesis 4                                                                                                                    |
 | UI E2E         | Playwright 1.55+, Cypress 14, @axe-core/playwright                                                                                |
 | Performance    | k6                                                                                                                                |
+| LLM evals      | LangSmith tracing, Anthropic Claude, pytest-driven LLM-as-judge against a golden dataset                                          |
 | Hygiene        | pre-commit, ruff, prettier, eslint, gitleaks, commitlint, typos, Dependabot                                                       |
 | Infra          | Docker (multi-stage), GitHub Actions                                                                                              |
 
@@ -102,6 +104,8 @@ cd ../demo-app && uv sync && uv run uvicorn demo_app.main:app --port 5050
 | Playwright                 | `cd playwright && pnpm test`                                 |
 | Cypress                    | `cd cypress && pnpm cypress run`                             |
 | Performance (k6)           | `k6 run perf/items_smoke.js`                                 |
+| LLM evals (offline)        | `cd llm-evals && uv run pytest -m "not live"`                |
+| LLM evals (live)           | `cd llm-evals && uv run pytest -m live` (needs ANTHROPIC_API_KEY) |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup.
 

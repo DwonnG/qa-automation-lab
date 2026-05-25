@@ -1,0 +1,8 @@
+{"category": "office supplies", "min_quantity": 1, "max_quantity": 500}
+{"category": "groceries (non-perishable)", "min_quantity": 1, "max_quantity": 1000}
+{"category": "hardware tools", "min_quantity": 1, "max_quantity": 200}
+{"category": "kitchenware", "min_quantity": 1, "max_quantity": 300}
+{"category": "books", "min_quantity": 1, "max_quantity": 100}
+{"category": "pet supplies", "min_quantity": 1, "max_quantity": 400}
+{"category": "auto parts", "min_quantity": 1, "max_quantity": 250}
+{"category": "gardening", "min_quantity": 1, "max_quantity": 350}
