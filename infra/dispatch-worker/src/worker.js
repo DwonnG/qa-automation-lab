@@ -264,12 +264,33 @@ async function handleRunStatus(runId, env, ctx, requestUrl) {
 async function serveBundleFile(runId, filename, env, ctx) {
   const kvKey = `bundle:${runId}:${filename}`;
   let body = await env.DISPATCH_KV.get(kvKey);
+  let primeResult = null;
   if (body === null) {
-    await primeBundleCache(runId, env);
+    primeResult = await primeBundleCache(runId, env);
     body = await env.DISPATCH_KV.get(kvKey);
   }
   if (body === null) {
-    return json({ error: "bundle file not available yet" }, 404);
+    // Surface the underlying failure so the dashboard (and curl) can see
+    // what's going wrong instead of getting a generic 404. Pull the last
+    // diagnostic from KV in case primeResult was already cached above.
+    const diagRaw = await env.DISPATCH_KV.get(`diag:${runId}`);
+    let diag = primeResult;
+    if (!diag && diagRaw) {
+      try {
+        diag = JSON.parse(diagRaw);
+      } catch {
+        diag = { step: "diag-parse", error: diagRaw };
+      }
+    }
+    return json(
+      {
+        error: "bundle file not available yet",
+        run_id: runId,
+        filename,
+        diag: diag || { step: "unknown" },
+      },
+      404,
+    );
   }
   const contentType = filename.endsWith(".json")
     ? "application/json; charset=utf-8"
@@ -283,26 +304,126 @@ async function serveBundleFile(runId, filename, env, ctx) {
   });
 }
 
+// Returns { ok: true, files: [...] } on success or { ok: false, step, ...info }
+// on failure. Also persists the result to KV under `diag:<runId>` so a later
+// serveBundleFile call (e.g. from a different request) can report the cause.
 async function primeBundleCache(runId, env) {
-  const listRes = await ghApi(
-    env,
-    `/repos/${env.GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=50`,
-  );
-  if (!listRes.ok) return;
+  const recordDiag = async (info) => {
+    try {
+      await env.DISPATCH_KV.put(`diag:${runId}`, JSON.stringify(info), {
+        expirationTtl: BUNDLE_KV_TTL_SECONDS,
+      });
+    } catch {
+      // best-effort diagnostic; don't mask the real failure
+    }
+    return info;
+  };
+
+  let listRes;
+  try {
+    listRes = await ghApi(
+      env,
+      `/repos/${env.GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=50`,
+    );
+  } catch (err) {
+    return recordDiag({
+      ok: false,
+      step: "list-artifacts-fetch",
+      error: String(err && err.message ? err.message : err),
+    });
+  }
+  if (!listRes.ok) {
+    return recordDiag({
+      ok: false,
+      step: "list-artifacts",
+      status: listRes.status,
+      detail: (await safeText(listRes)).slice(0, 300),
+    });
+  }
   const list = await listRes.json();
   const bundle = (list.artifacts || []).find(
     (a) => a.name === TARGET_BUNDLE_ARTIFACT,
   );
-  if (!bundle) return;
-  if (bundle.expired) return;
+  if (!bundle) {
+    return recordDiag({
+      ok: false,
+      step: "find-bundle",
+      detail: `artifact "${TARGET_BUNDLE_ARTIFACT}" not in run`,
+      available: (list.artifacts || []).map((a) => a.name),
+    });
+  }
+  if (bundle.expired) {
+    return recordDiag({
+      ok: false,
+      step: "bundle-expired",
+      artifact_id: bundle.id,
+    });
+  }
 
-  const dlRes = await ghApi(
-    env,
-    `/repos/${env.GITHUB_REPO}/actions/artifacts/${bundle.id}/zip`,
-    { redirect: "follow" },
-  );
-  if (!dlRes.ok) return;
-  const zipBytes = new Uint8Array(await dlRes.arrayBuffer());
+  // Manual redirect: the /artifacts/<id>/zip endpoint always 302s to a
+  // presigned blob URL on a different origin (S3-style). Forwarding our
+  // GitHub Authorization header to that origin is both wrong (it leaks
+  // creds cross-origin) and triggers AmbiguousAuth-style 400 responses
+  // because the presigned URL embeds its own auth in the query string.
+  // So: take the redirect manually and refetch the Location without auth.
+  let redirectRes;
+  try {
+    redirectRes = await ghApi(
+      env,
+      `/repos/${env.GITHUB_REPO}/actions/artifacts/${bundle.id}/zip`,
+      { redirect: "manual" },
+    );
+  } catch (err) {
+    return recordDiag({
+      ok: false,
+      step: "artifact-zip-fetch",
+      artifact_id: bundle.id,
+      error: String(err && err.message ? err.message : err),
+    });
+  }
+
+  let zipBytes;
+  if (redirectRes.status >= 300 && redirectRes.status < 400) {
+    const location = redirectRes.headers.get("location");
+    if (!location) {
+      return recordDiag({
+        ok: false,
+        step: "artifact-zip-redirect",
+        status: redirectRes.status,
+        detail: "302 without Location header",
+      });
+    }
+    let blobRes;
+    try {
+      blobRes = await fetch(location, { redirect: "follow" });
+    } catch (err) {
+      return recordDiag({
+        ok: false,
+        step: "artifact-zip-blob-fetch",
+        error: String(err && err.message ? err.message : err),
+      });
+    }
+    if (!blobRes.ok) {
+      return recordDiag({
+        ok: false,
+        step: "artifact-zip-blob",
+        status: blobRes.status,
+        detail: (await safeText(blobRes)).slice(0, 300),
+      });
+    }
+    zipBytes = new Uint8Array(await blobRes.arrayBuffer());
+  } else if (redirectRes.ok) {
+    // Some Workers builds auto-follow even with redirect:"manual" — accept
+    // the body if we already have it.
+    zipBytes = new Uint8Array(await redirectRes.arrayBuffer());
+  } else {
+    return recordDiag({
+      ok: false,
+      step: "artifact-zip",
+      status: redirectRes.status,
+      detail: (await safeText(redirectRes)).slice(0, 300),
+    });
+  }
 
   let entries;
   try {
@@ -313,15 +434,50 @@ async function primeBundleCache(runId, env) {
         file.name.endsWith("/agent-feedback.md") ||
         file.name.endsWith("/agent-summary.json"),
     });
-  } catch {
-    return;
+  } catch (err) {
+    return recordDiag({
+      ok: false,
+      step: "unzip",
+      zip_bytes: zipBytes.byteLength,
+      error: String(err && err.message ? err.message : err),
+    });
   }
 
-  for (const path of Object.keys(entries)) {
+  const paths = Object.keys(entries);
+  if (paths.length === 0) {
+    return recordDiag({
+      ok: false,
+      step: "unzip-empty",
+      zip_bytes: zipBytes.byteLength,
+      detail: "no agent-feedback.md / agent-summary.json found in bundle",
+    });
+  }
+
+  const written = [];
+  for (const path of paths) {
     const base = path.split("/").pop();
     const text = strFromU8(entries[path]);
-    await env.DISPATCH_KV.put(`bundle:${runId}:${base}`, text, {
-      expirationTtl: BUNDLE_KV_TTL_SECONDS,
-    });
+    try {
+      await env.DISPATCH_KV.put(`bundle:${runId}:${base}`, text, {
+        expirationTtl: BUNDLE_KV_TTL_SECONDS,
+      });
+      written.push(base);
+    } catch (err) {
+      return recordDiag({
+        ok: false,
+        step: "kv-put",
+        key: base,
+        error: String(err && err.message ? err.message : err),
+      });
+    }
+  }
+  return recordDiag({ ok: true, files: written, zip_bytes: zipBytes.byteLength });
+}
+
+async function safeText(res) {
+  try {
+    return await res.text();
+  } catch {
+    return "";
   }
 }
