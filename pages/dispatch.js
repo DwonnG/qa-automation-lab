@@ -370,19 +370,59 @@
         var summary = parts[1];
         btn.disabled = false;
         var d = catalog[defectId];
-        if (summary && summary.totals && summary.totals.failed > 0) {
-          if (d && d.tier) markTierFailed(d.tier);
-        } else {
-          clearTierMarks();
-        }
-        setStatus(
-          "Run #" +
+        var failed =
+          summary && summary.totals ? summary.totals.failed || 0 : null;
+        var agentStatus = summary && summary.agent_status;
+
+        // Drive both the tier color AND the status pill from the same
+        // source: the per-test failure count from agent-summary.json.
+        // "Conclusion: success" on the GitHub run is misleading here
+        // because suite jobs run with continue-on-error so the agent can
+        // still review — only the agent job decides workflow conclusion.
+        var msg;
+        var klass;
+        if (failed === null) {
+          // No summary returned (worker hiccup) — fall back to run conclusion.
+          msg =
+            "Run #" +
             runId +
             " complete. Conclusion: " +
             (data.conclusion || "unknown") +
-            ".",
-          summary && summary.totals && summary.totals.failed > 0 ? "err" : "ok",
-        );
+            ".";
+          klass = data.conclusion === "success" ? "ok" : "err";
+          clearTierMarks();
+        } else if (agentStatus && agentStatus !== "ok") {
+          msg =
+            "Run #" +
+            runId +
+            " · agent error (" +
+            agentStatus +
+            "). No review available.";
+          klass = "err";
+          clearTierMarks();
+        } else if (failed > 0) {
+          // The expected happy path for the demo: the pyramid caught it.
+          msg =
+            "Run #" +
+            runId +
+            " · " +
+            failed +
+            " failure" +
+            (failed === 1 ? "" : "s") +
+            " caught.";
+          klass = "err";
+          if (d && d.tier) markTierFailed(d.tier);
+        } else {
+          // Defect ran but no test failed → real coverage gap. Worth showing.
+          msg =
+            "Run #" +
+            runId +
+            " · defect escaped — no tests caught it.";
+          klass = "warn";
+          clearTierMarks();
+        }
+        setStatus(msg, klass);
+
         showResult(
           '<header class="defect-result-head">' +
             '<span class="defect-result-tag">Run #' +

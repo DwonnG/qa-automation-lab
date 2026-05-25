@@ -2309,6 +2309,9 @@ code {
 .defect-injector-status--err {
   color: var(--bad);
 }
+.defect-injector-status--warn {
+  color: var(--warn);
+}
 
 .defect-injector-result {
   padding: 0.95rem 1.05rem;
@@ -2433,10 +2436,53 @@ code {
   outline-offset: 2px;
   animation: defect-pulse 1.6s ease-in-out infinite;
 }
+/* Loud, unambiguous "this tier just caught a defect" state.
+   Tints the band itself (not just an outline) so the signal reads at
+   a glance even when zoomed out. Keeps the per-tier gradient legible
+   underneath via a translucent red overlay rather than a flat fill. */
 .lab-tier--defect-failed {
+  position: relative;
   outline: 2px solid var(--bad);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--bad-dim);
+  box-shadow:
+    0 0 0 6px var(--bad-dim),
+    0 0 24px 0 var(--bad-glow);
+  animation: defect-failed-flash 0.9s ease-out 1;
+}
+.lab-tier--defect-failed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bad) 28%, transparent),
+    color-mix(in srgb, var(--bad) 14%, transparent)
+  );
+  mix-blend-mode: normal;
+}
+@keyframes defect-failed-flash {
+  0% {
+    box-shadow:
+      0 0 0 0 var(--bad-glow),
+      0 0 0 0 var(--bad-glow);
+  }
+  60% {
+    box-shadow:
+      0 0 0 14px color-mix(in srgb, var(--bad) 32%, transparent),
+      0 0 36px 4px var(--bad-glow);
+  }
+  100% {
+    box-shadow:
+      0 0 0 6px var(--bad-dim),
+      0 0 24px 0 var(--bad-glow);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lab-tier--defect-failed {
+    animation: none;
+  }
 }
 @keyframes defect-pulse {
   0%,
