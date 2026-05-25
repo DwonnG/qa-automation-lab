@@ -44,6 +44,7 @@ jobs:
   plan:
     name: Plan suites
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     outputs:
       suites: ${{ steps.derive.outputs.suites }}
       run_backend: ${{ steps.derive.outputs.run_backend }}
@@ -98,6 +99,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -129,6 +131,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_pytest_api == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -175,6 +178,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_schemathesis == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -224,6 +228,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_playwright == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -277,6 +282,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_perf == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
@@ -324,6 +330,7 @@ jobs:
     needs: [plan, backend, pytest-api, schemathesis, playwright, perf]
     if: always() && needs.plan.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
