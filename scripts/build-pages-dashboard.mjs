@@ -1718,14 +1718,15 @@ function baseLayout({ title, body, extraMeta = "" }) {
     <nav class="top-nav" aria-label="Site">
       <a class="nav-brand" href="${PAGES_BASE}/">
         <span class="nav-brand-mark" aria-hidden="true">QA</span>
-        <span>automation-lab</span>
+        <span><span class="nav-brand-full">automation-</span>lab</span>
       </a>
       <div class="nav-links">
-        <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
+        <a class="nav-back" href="https://dwonng.github.io/#work"><svg class="nav-back__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Portfolio</a>
         <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
         <a href="${PAGES_BASE}/#defects">Defects</a>
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
+      <a class="nav-back nav-back--mobile" href="https://dwonng.github.io/#work"><svg class="nav-back__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Portfolio</a>
       <button
         class="nav-toggle"
         type="button"
@@ -1740,7 +1741,6 @@ function baseLayout({ title, body, extraMeta = "" }) {
     </nav>
 
     <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
-      <a class="nav-back" href="https://dwonng.github.io/#work">&larr; Portfolio</a>
       <a href="${PAGES_BASE}/#pyramid">Pyramid</a>
       <a href="${PAGES_BASE}/#defects">Defects</a>
       <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
