@@ -8,7 +8,7 @@ dependencies = [
   "pytest>=8.3.0",
   "pytest-xdist>=3.6.0",
   "pytest-randomly>=3.16.0",
-  "faker>=33.0.0",
+  "faker>=40.21.0",
 ]
 
 [dependency-groups]
