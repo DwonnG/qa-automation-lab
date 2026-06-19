@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
@@ -64,7 +64,7 @@ jobs:
     # exit cleanly instead of failing red.
     if: ${{ github.event_name != 'pull_request' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
