@@ -3,7 +3,7 @@
 ###############################################
 # Stage 1: build the React SPA with pnpm
 ###############################################
-FROM node:22-alpine AS web-build
+FROM node:25-alpine AS web-build
 WORKDIR /app/web
 
 RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
@@ -17,7 +17,7 @@ RUN pnpm build
 ###############################################
 # Stage 2: install backend with uv
 ###############################################
-FROM python:3.13-slim AS backend-build
+FROM python:3.14-slim AS backend-build
 WORKDIR /app/demo-app
 
 RUN apt-get update \
@@ -39,7 +39,7 @@ RUN uv sync --frozen --no-dev || uv sync --no-dev
 ###############################################
 # Stage 3: runtime
 ###############################################
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
