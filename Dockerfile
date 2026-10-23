@@ -3,7 +3,7 @@
 ###############################################
 # Stage 1: build the React SPA with pnpm
 ###############################################
-FROM node:22-alpine AS web-build
+FROM node:25-alpine AS web-build
 WORKDIR /app/web
 
 RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
